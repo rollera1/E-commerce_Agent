@@ -1,0 +1,20 @@
+server:
+  port: ${JAVA_SERVER_PORT:8085}
+
+spring:
+  application:
+    name: ecommerce-agent-backend
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3307/ecommerce_agent?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USERNAME:ecommerce_agent}
+    password: ${DB_PASSWORD:local_dev_password}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+external-services:
+  python:
+    base-url: ${PYTHON_SERVICE_URL:http://localhost:8005}
