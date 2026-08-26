@@ -1,0 +1,26 @@
+name: ecommerce-agent
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: ecommerce-agent-mysql
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local_root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ecommerce_agent}
+      MYSQL_USER: ${MYSQL_USER:-ecommerce_agent}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-local_dev_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  mysql_data:
+    name: ecommerce-agent-mysql-data
