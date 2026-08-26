@@ -1,0 +1,12 @@
+{
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-25",
+      "path": "D:\\jdks\\jdk25",
+      "default": true
+    }
+  ],
+  "java.jdt.ls.java.home": "D:\\jdks\\jdk25",
+  "java.import.maven.java.home": "D:\\jdks\\jdk25",
+  "python.defaultInterpreterPath": "${workspaceFolder}\\ai-python\\.venv\\Scripts\\python.exe"
+}
