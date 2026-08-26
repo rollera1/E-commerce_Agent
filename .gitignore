@@ -8,6 +8,7 @@
 # Java
 **/target/
 *.class
+**/.m2/
 
 # Python
 **/.venv/
@@ -15,6 +16,7 @@
 **/.pytest_cache/
 **/.ruff_cache/
 *.py[cod]
+**/.uv-cache/
 
 # Frontend
 **/node_modules/
