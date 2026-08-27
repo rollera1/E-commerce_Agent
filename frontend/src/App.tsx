@@ -23,12 +23,15 @@ const statusLabel: Record<CheckState, string> = {
 function App() {
   const [javaStatus, setJavaStatus] = useState<CheckState>('idle')
   const [pythonStatus, setPythonStatus] = useState<CheckState>('idle')
-  const [details, setDetails] = useState('点击按钮检查 Java 与 Python 服务。')
+  const [databaseStatus, setDatabaseStatus] = useState<CheckState>('idle')
+  const [details, setDetails] = useState('点击按钮检查 Java、Python 与 MySQL。')
 
   async function checkServices() {
     let javaHealthy = false
+    let databaseHealthy = false
     setJavaStatus('loading')
     setPythonStatus('loading')
+    setDatabaseStatus('loading')
     setDetails('正在请求 Java 健康检查……')
 
     try {
@@ -40,16 +43,27 @@ function App() {
       setJavaStatus('ok')
       javaHealthy = true
 
+      const databaseResponse = await fetch('/api/health/database')
+      const databaseData = (await databaseResponse.json()) as HealthPayload
+      if (!databaseResponse.ok || databaseData.status !== 'ok') {
+        throw new Error('Java 无法连接 MySQL 数据库')
+      }
+      setDatabaseStatus('ok')
+      databaseHealthy = true
+
       const pythonResponse = await fetch('/api/health/python')
       const pythonData = (await pythonResponse.json()) as HealthPayload
       if (!pythonResponse.ok || pythonData.downstream?.status !== 'ok') {
         throw new Error('Java 无法连接 Python 服务')
       }
       setPythonStatus('ok')
-      setDetails('Java 服务正常，并已通过 REST 成功访问 Python 服务。')
+      setDetails('Java、Python 与服务器 MySQL 均运行正常，服务间通信已打通。')
     } catch (error) {
       if (!javaHealthy) {
         setJavaStatus('error')
+      }
+      if (!databaseHealthy) {
+        setDatabaseStatus('error')
       }
       setPythonStatus('error')
       setDetails(error instanceof Error ? error.message : '服务检查失败')
@@ -80,7 +94,12 @@ function App() {
         <div className="status-grid">
           <StatusCard title="Java 业务后端" port="8085" state={javaStatus} />
           <StatusCard title="Python 能力服务" port="8005" state={pythonStatus} />
-          <StatusCard title="MySQL 数据库" port="3307" state="idle" note="由 Docker 管理" />
+          <StatusCard
+            title="MySQL 数据库"
+            port="3307"
+            state={databaseStatus}
+            note="服务器 · SSH 隧道"
+          />
         </div>
 
         <p className="result-message" role="status">{details}</p>
