@@ -5,6 +5,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ecommerce.agent.infrastructure.database.DatabaseHealthResponse;
+import com.ecommerce.agent.infrastructure.database.DatabaseHealthService;
 import com.ecommerce.agent.integration.python.PythonHealthClient;
 import com.ecommerce.agent.integration.python.PythonHealthResponse;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,9 @@ class HealthControllerTest {
 
     @MockitoBean
     private PythonHealthClient pythonHealthClient;
+
+    @MockitoBean
+    private DatabaseHealthService databaseHealthService;
 
     @Test
     void returnsJavaHealth() throws Exception {
@@ -40,5 +45,17 @@ class HealthControllerTest {
                 .andExpect(jsonPath("$.status").value("ok"))
                 .andExpect(jsonPath("$.caller").value("backend-java"))
                 .andExpect(jsonPath("$.downstream.service").value("ai-python"));
+    }
+
+    @Test
+    void returnsDatabaseHealth() throws Exception {
+        when(databaseHealthService.checkHealth())
+                .thenReturn(new DatabaseHealthResponse("ok", "mysql", 1));
+
+        mockMvc.perform(get("/api/health/database"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ok"))
+                .andExpect(jsonPath("$.service").value("mysql"))
+                .andExpect(jsonPath("$.probe").value(1));
     }
 }

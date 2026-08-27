@@ -1,5 +1,7 @@
 package com.ecommerce.agent.web;
 
+import com.ecommerce.agent.infrastructure.database.DatabaseHealthResponse;
+import com.ecommerce.agent.infrastructure.database.DatabaseHealthService;
 import com.ecommerce.agent.integration.python.PythonHealthClient;
 import com.ecommerce.agent.integration.python.PythonHealthResponse;
 import java.util.Map;
@@ -13,9 +15,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class HealthController {
 
     private final PythonHealthClient pythonHealthClient;
+    private final DatabaseHealthService databaseHealthService;
 
-    public HealthController(PythonHealthClient pythonHealthClient) {
+    public HealthController(
+            PythonHealthClient pythonHealthClient,
+            DatabaseHealthService databaseHealthService) {
         this.pythonHealthClient = pythonHealthClient;
+        this.databaseHealthService = databaseHealthService;
     }
 
     @GetMapping
@@ -31,6 +37,11 @@ public class HealthController {
         PythonHealthResponse python = pythonHealthClient.checkHealth();
         String status = "ok".equals(python.status()) ? "ok" : "degraded";
         return ResponseEntity.ok(new IntegrationHealthResponse(status, "backend-java", python));
+    }
+
+    @GetMapping("/database")
+    public DatabaseHealthResponse databaseHealth() {
+        return databaseHealthService.checkHealth();
     }
 
     public record IntegrationHealthResponse(
