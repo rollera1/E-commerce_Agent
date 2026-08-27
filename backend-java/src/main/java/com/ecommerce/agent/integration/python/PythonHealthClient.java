@@ -8,8 +8,10 @@ public class PythonHealthClient {
 
     private final RestClient restClient;
 
-    public PythonHealthClient(RestClient.Builder builder, PythonServiceProperties properties) {
-        this.restClient = builder.baseUrl(properties.baseUrl().toString()).build();
+    public PythonHealthClient(PythonServiceProperties properties) {
+        this.restClient = RestClient.builder()
+                .baseUrl(properties.baseUrl().toString())
+                .build();
     }
 
     public PythonHealthResponse checkHealth() {
