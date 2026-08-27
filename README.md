@@ -8,7 +8,7 @@
 backend-java/  Spring Boot 业务后端和 MySQL 数据所有权
 ai-python/     FastAPI 商品来源与未来 AI 能力服务
 frontend/      React 商家操作页面
-deploy/        Docker Compose 本地基础设施
+deploy/        Ubuntu 服务器上的数据库基础设施
 scripts/       Windows 本地启动与验收脚本
 ```
 
@@ -19,7 +19,7 @@ scripts/       Windows 本地启动与验收脚本
 - Python 3.12、uv
 - Node.js 24、npm 11
 - React 19.2.8、TypeScript 7.0.2、Vite 8.2.2
-- Docker Desktop、MySQL 8.4
+- Ubuntu 服务器 Docker、MySQL 8.4
 
 ## 首次启动
 
@@ -33,19 +33,28 @@ scripts/       Windows 本地启动与验收脚本
 Copy-Item .env.example .env
 ```
 
-### 2. 启动 MySQL
+### 2. 打开数据库 SSH 隧道
 
-先确认 Docker Desktop 已完全启动，然后运行：
+MySQL 已在 Ubuntu 服务器的独立容器中运行。打开一个 PowerShell：
 
 ```powershell
 .\scripts\start-database.cmd
 ```
 
-MySQL 容器端口映射为 `localhost:3307`，避免和 Windows 本地 MySQL 的 `3306` 冲突。
+保持该窗口开启。脚本通过本机 SSH 配置中的 `cporder` 别名，把服务器的
+`127.0.0.1:3308` 映射为本机 `127.0.0.1:3307`。数据库端口没有暴露到公网，
+也不会占用服务器上其他项目使用的 `3306` 和 `3307`。
+
+服务器数据库的一次性部署配置保存在 `deploy/compose.yaml`。当前资源为：
+
+- 容器：`ecommerce-agent-mysql`
+- 数据卷：`ecommerce-agent-mysql-data`
+- 镜像：`mysql:8.4`
+- 监听：仅服务器 `127.0.0.1:3308`
 
 ### 3. 启动 Python
 
-打开第二个 PowerShell：
+打开另一个 PowerShell：
 
 ```powershell
 .\scripts\start-python.cmd
@@ -58,7 +67,7 @@ MySQL 容器端口映射为 `localhost:3307`，避免和 Windows 本地 MySQL �
 
 ### 4. 启动 Java
 
-打开第三个 PowerShell：
+打开另一个 PowerShell：
 
 ```powershell
 .\scripts\start-backend.cmd
@@ -79,7 +88,7 @@ MySQL 容器端口映射为 `localhost:3307`，避免和 Windows 本地 MySQL �
 
 ### 5. 启动前端
 
-打开第四个 PowerShell：
+打开另一个 PowerShell：
 
 ```powershell
 .\scripts\start-frontend.cmd
@@ -123,4 +132,4 @@ npm.cmd run build
 | `GET` | `/api/health/python` | Java 调用 Python 并返回下游状态 |
 | `GET` | `http://localhost:8005/health` | Python 服务自身健康检查 |
 
-第一批次不需要 Shopify、CJ、LLM 或服务器密钥。任何真实密钥都只能写入本地 `.env`，不得提交到 Git。
+第一批次不需要 Shopify、CJ 或 LLM 密钥，只使用电脑上现有的服务器 SSH 配置。任何真实业务密钥都只能写入本地 `.env`，不得提交到 Git。
