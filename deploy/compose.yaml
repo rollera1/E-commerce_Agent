@@ -6,7 +6,8 @@ services:
     container_name: ecommerce-agent-mysql
     restart: unless-stopped
     ports:
-      - "3307:3306"
+      # Only the server itself can reach MySQL. Developers connect through SSH.
+      - "127.0.0.1:3308:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local_root_password}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ecommerce_agent}
