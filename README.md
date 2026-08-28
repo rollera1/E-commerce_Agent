@@ -129,6 +129,7 @@ npm.cmd run build
 | 方法 | 地址 | 作用 |
 |---|---|---|
 | `GET` | `/api/health` | Java 服务自身健康检查 |
+| `GET` | `/api/health/database` | Java 对 MySQL 执行真实连接检查 |
 | `GET` | `/api/health/python` | Java 调用 Python 并返回下游状态 |
 | `GET` | `http://localhost:8005/health` | Python 服务自身健康检查 |
 
