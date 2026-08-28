@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 type CheckState = 'idle' | 'loading' | 'ok' | 'error'
 
@@ -69,6 +69,10 @@ function App() {
       setDetails(error instanceof Error ? error.message : '服务检查失败')
     }
   }
+
+  useEffect(() => {
+    void checkServices()
+  }, [])
 
   return (
     <main className="page-shell">
