@@ -1,6 +1,6 @@
 # 基于多 Agent 的电商自动化运营系统
 
-当前代码处于第一批次工程骨架阶段。目标是建立 Java、Python、React 与 MySQL 的最小可运行环境，并验证 Java 能通过 REST 调用 Python。Shopify 和 CJdropshipping 将从后续批次开始接入。
+当前代码已进入第二批次：在第一周 Java、Python、React 与服务器 MySQL 工程骨架上，增加 Shopify 开发店铺授权、GraphQL 店铺信息查询和连接状态页面。CJdropshipping 将在后续批次接入。
 
 ## 目录
 
@@ -27,11 +27,23 @@ scripts/       Windows 本地启动与验收脚本
 
 ### 1. 准备环境变量
 
-复制 `.env.example` 为 `.env`。第一周的本地默认值可以直接使用；`.env` 已被 Git 忽略。
+复制 `.env.example` 为 `.env`。`.env` 已被 Git 忽略，真实 Shopify Client Secret 只能写在这个本地文件中。
 
 ```powershell
 Copy-Item .env.example .env
 ```
+
+第二周连接 Shopify 前，填写以下字段：
+
+```dotenv
+SHOPIFY_ENABLED=true
+SHOPIFY_SHOP_DOMAIN=你的开发店铺.myshopify.com
+SHOPIFY_API_VERSION=2026-07
+SHOPIFY_CLIENT_ID=Dev-Dashboard-中的-Client-ID
+SHOPIFY_CLIENT_SECRET=Dev-Dashboard-中的-Client-Secret
+```
+
+当前实现使用 Shopify 的 Client Credentials Grant，适用于应用和 Development Store 同在一个 Dev Dashboard 组织的开发场景。应用需要先在 Dev Dashboard 中选择 `write_products,read_orders` 权限并安装到该开发店铺。如果不在同一组织，先不要启用上述配置，需要改用嵌入式应用的 Token Exchange 授权流程。
 
 ### 2. 打开数据库 SSH 隧道
 
@@ -74,11 +86,13 @@ MySQL 已在 Ubuntu 服务器的独立容器中运行。打开一个 PowerShell�
 ```
 
 这个脚本只在自己的进程内设置 `JAVA_HOME=D:\jdks\jdk25`。关闭窗口后环境变量失效，系统默认 JDK 17 不受影响。
+脚本也会读取项目根目录的 `.env`，变量同样只在该进程内生效。
 
 验证地址：
 
 - Java 健康检查：<http://localhost:8085/api/health>
 - Java 调用 Python：<http://localhost:8085/api/health/python>
+- Shopify 连接状态：<http://localhost:8085/api/shopify/connection>
 
 也可以运行自动验收：
 
@@ -124,7 +138,7 @@ npm.cmd install
 npm.cmd run build
 ```
 
-## 第一批次接口
+## 当前接口
 
 | 方法 | 地址 | 作用 |
 |---|---|---|
@@ -132,5 +146,7 @@ npm.cmd run build
 | `GET` | `/api/health/database` | Java 对 MySQL 执行真实连接检查 |
 | `GET` | `/api/health/python` | Java 调用 Python 并返回下游状态 |
 | `GET` | `http://localhost:8005/health` | Python 服务自身健康检查 |
+| `GET` | `/api/shopify/connection` | 查看 Shopify 是否配置及已保存的店铺元数据 |
+| `POST` | `/api/shopify/connection` | 申请短期令牌，执行真实 GraphQL 查询并保存店铺连接 |
 
-第一批次不需要 Shopify、CJ 或 LLM 密钥，只使用电脑上现有的服务器 SSH 配置。任何真实业务密钥都只能写入本地 `.env`，不得提交到 Git。
+Shopify 访问令牌只缓存在 Java 进程内并在过期前刷新，不返回前端、不写入数据库。数据库仅保存店铺 ID、域名、名称、币种和验证时间。任何真实业务密钥都只能写入本地 `.env`，不得提交到 Git。

@@ -1,6 +1,13 @@
 @echo off
 setlocal
 
+set "PROJECT_DIR=%~dp0.."
+if exist "%PROJECT_DIR%\.env" (
+  for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%PROJECT_DIR%\.env") do (
+    if not "%%A"=="" set "%%A=%%B"
+  )
+)
+
 if not defined ECOMMERCE_JAVA_HOME set "ECOMMERCE_JAVA_HOME=D:\jdks\jdk25"
 if not exist "%ECOMMERCE_JAVA_HOME%\bin\java.exe" (
   echo JDK 25 was not found at %ECOMMERCE_JAVA_HOME%.
@@ -10,7 +17,7 @@ if not exist "%ECOMMERCE_JAVA_HOME%\bin\java.exe" (
 
 set "JAVA_HOME=%ECOMMERCE_JAVA_HOME%"
 set "PATH=%JAVA_HOME%\bin;%PATH%"
-cd /d "%~dp0..\backend-java"
+cd /d "%PROJECT_DIR%\backend-java"
 
 echo This process uses:
 java -version
