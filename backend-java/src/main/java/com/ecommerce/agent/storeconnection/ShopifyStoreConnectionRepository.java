@@ -7,4 +7,6 @@ public interface ShopifyStoreConnectionRepository
         extends JpaRepository<ShopifyStoreConnection, Long> {
 
     Optional<ShopifyStoreConnection> findByMyshopifyDomain(String myshopifyDomain);
+
+    Optional<ShopifyStoreConnection> findFirstByOrderByIdAsc();
 }
