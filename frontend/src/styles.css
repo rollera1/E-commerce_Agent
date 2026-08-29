@@ -97,6 +97,11 @@ h2 {
   padding: 28px;
 }
 
+.shopify-panel {
+  margin-bottom: 20px;
+  border-color: rgba(23, 107, 71, 0.22);
+}
+
 .panel-heading {
   display: flex;
   align-items: center;
@@ -179,6 +184,72 @@ h2 {
   background: #f0f4f0;
 }
 
+.shopify-summary {
+  display: grid;
+  grid-template-columns: 0.8fr 1.4fr 1fr;
+  gap: 14px;
+}
+
+.shopify-summary > div {
+  min-height: 126px;
+  padding: 20px;
+  border: 1px solid #e0e6e1;
+  border-radius: 14px;
+  background: #fafcf9;
+}
+
+.shopify-summary strong,
+.shopify-summary small,
+.field-label {
+  display: block;
+}
+
+.shopify-summary strong {
+  margin-top: 12px;
+  font-size: 17px;
+}
+
+.shopify-summary small {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+  color: #748078;
+  line-height: 1.45;
+}
+
+.field-label {
+  color: #748078;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.connection-state {
+  width: fit-content;
+  padding: 7px 11px;
+  border-radius: 999px;
+  color: #7d5a16;
+  background: #f4e8cc;
+  font-size: 14px !important;
+}
+
+.connection-state--CONNECTED {
+  color: #0f6640;
+  background: #dcefe4;
+}
+
+.connection-state--NOT_CONFIGURED {
+  color: #59645e;
+  background: #e8ede9;
+}
+
+.security-note {
+  margin: 12px 2px 0;
+  color: #6b776f;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .roadmap {
   margin-top: 20px;
   padding: 28px;
@@ -223,6 +294,7 @@ h2 {
   }
 
   .status-grid,
+  .shopify-summary,
   .roadmap ol {
     grid-template-columns: 1fr;
   }
