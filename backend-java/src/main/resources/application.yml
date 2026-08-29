@@ -18,3 +18,10 @@ spring:
 external-services:
   python:
     base-url: ${PYTHON_SERVICE_URL:http://localhost:8005}
+
+shopify:
+  enabled: ${SHOPIFY_ENABLED:false}
+  shop-domain: ${SHOPIFY_SHOP_DOMAIN:}
+  api-version: ${SHOPIFY_API_VERSION:2026-07}
+  client-id: ${SHOPIFY_CLIENT_ID:}
+  client-secret: ${SHOPIFY_CLIENT_SECRET:}
