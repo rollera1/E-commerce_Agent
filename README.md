@@ -100,6 +100,12 @@ MySQL 已在 Ubuntu 服务器的独立容器中运行。打开一个 PowerShell�
 .\scripts\check-services.ps1
 ```
 
+第二周完成真实 Shopify 配置后，可以使用严格模式，额外要求店铺状态必须为 `CONNECTED`：
+
+```powershell
+.\scripts\check-services.ps1 -RequireShopify
+```
+
 ### 5. 启动前端
 
 打开另一个 PowerShell：
@@ -150,3 +156,15 @@ npm.cmd run build
 | `POST` | `/api/shopify/connection` | 申请短期令牌，执行真实 GraphQL 查询并保存店铺连接 |
 
 Shopify 访问令牌只缓存在 Java 进程内并在过期前刷新，不返回前端、不写入数据库。数据库仅保存店铺 ID、域名、名称、币种和验证时间。任何真实业务密钥都只能写入本地 `.env`，不得提交到 Git。
+
+## 第二批次验收结果
+
+- Dev Dashboard 组织：`HuaShun Tech`
+- Development Store：`ecommerce-agent-dev.myshopify.com`
+- 应用：`Ecommerce Agent MVP`
+- 有效版本：`v0.1.0-shopify-connect`
+- 权限：`write_products,read_orders`
+- 真实 GraphQL 查询：通过
+- 重复连接：数据库保持 1 条店铺记录
+- Java 自动化测试：25 项通过
+- Java、Python、服务器 MySQL 与 Shopify 严格验收：通过

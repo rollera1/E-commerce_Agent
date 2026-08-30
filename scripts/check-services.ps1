@@ -1,3 +1,7 @@
+param(
+    [switch]$RequireShopify
+)
+
 $ErrorActionPreference = "Stop"
 
 Write-Host "Checking Java service..." -ForegroundColor Cyan
@@ -18,6 +22,10 @@ $shopify | ConvertTo-Json -Depth 4
 
 if ($java.status -ne "ok" -or $database.status -ne "ok" -or $database.probe -ne 1 -or $integration.downstream.status -ne "ok") {
     throw "One or more services are unhealthy."
+}
+
+if ($RequireShopify -and $shopify.state -ne "CONNECTED") {
+    throw "Shopify is required for this check but is not connected."
 }
 
 Write-Host "All service checks passed." -ForegroundColor Green
