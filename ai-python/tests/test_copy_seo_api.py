@@ -46,6 +46,21 @@ def test_generates_structured_copy_pending_merchant_review() -> None:
     assert "apiKey" not in response.text
 
 
+def test_each_generation_has_a_unique_trace_id() -> None:
+    request = {
+        "sourceProductId": "fake-desk-lamp-001",
+        "targetMarket": "US",
+        "language": "en",
+    }
+
+    first = client.post("/internal/agents/copy-seo/generations", json=request)
+    second = client.post("/internal/agents/copy-seo/generations", json=request)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["generationId"] != second.json()["generationId"]
+
+
 def test_does_not_generate_for_an_unknown_source_product() -> None:
     response = client.post(
         "/internal/agents/copy-seo/generations",

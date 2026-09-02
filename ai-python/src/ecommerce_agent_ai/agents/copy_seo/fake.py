@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from ecommerce_agent_ai.agents.copy_seo.models import (
     AgentExecution,
     CopySeoContent,
@@ -16,7 +18,7 @@ class FakeCopySeoAgent:
     ) -> CopySeoGeneration:
         del target_market, language
         return CopySeoGeneration(
-            generation_id=f"fake-copy-seo-{product.source_product_id}-v1",
+            generation_id=str(uuid4()),
             source_product_id=product.source_product_id,
             status=GenerationStatus.SUCCEEDED,
             review_status=ReviewStatus.PENDING_REVIEW,
