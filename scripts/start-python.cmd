@@ -1,6 +1,10 @@
 @echo off
 setlocal
-cd /d "%~dp0..\ai-python"
+
+for %%I in ("%~dp0..") do set "PROJECT_DIR=%%~fI"
+for %%I in ("%PROJECT_DIR%\..") do set "WORKSPACE_DIR=%%~fI"
+set "UV_CACHE_DIR=%WORKSPACE_DIR%\.uv-cache"
+cd /d "%PROJECT_DIR%\ai-python"
 
 uv sync
 if errorlevel 1 exit /b 1
