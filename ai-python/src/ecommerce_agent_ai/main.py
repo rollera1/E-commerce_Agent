@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from ecommerce_agent_ai.product_sources.router import router as product_sources_router
+
 
 class HealthResponse(BaseModel):
     status: str
@@ -13,6 +15,7 @@ app = FastAPI(
     version="0.1.0",
     description="Product-source adapter and future AI capabilities.",
 )
+app.include_router(product_sources_router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
