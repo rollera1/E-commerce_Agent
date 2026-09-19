@@ -96,7 +96,7 @@ class ShopifyGraphqlAdminClientTest {
         assertThatThrownBy(() -> client.fetchShopInfo(
                         new ShopifyStoreDomain("sample-store.myshopify.com")))
                 .isInstanceOf(ShopifyIntegrationException.class)
-                .hasMessage("Shopify rejected the GraphQL query")
+                .hasMessage("Shopify 拒绝了 GraphQL 查询")
                 .message()
                 .doesNotContain("remote detail");
     }

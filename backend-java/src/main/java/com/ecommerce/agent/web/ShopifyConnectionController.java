@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 查询和验证 Shopify 店铺连接的 HTTP 接口。 */
 @RestController
 @RequestMapping("/api/shopify/connection")
 public class ShopifyConnectionController {

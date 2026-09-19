@@ -2,13 +2,19 @@ package com.ecommerce.agent.integration.shopify;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/** shopify 配置项的 Java 映射对象。 */
 @ConfigurationProperties(prefix = "shopify")
 public class ShopifyProperties {
 
+    // 是否启用真实 Shopify 连接。
     private boolean enabled;
+    // 目标开发店铺的 *.myshopify.com 域名。
     private String shopDomain = "";
+    // Shopify Admin API 版本。
     private String apiVersion = "2026-07";
+    // Shopify 应用 Client ID。
     private String clientId = "";
+    // Shopify 应用 Client Secret。
     private String clientSecret = "";
 
     public boolean isEnabled() {
@@ -53,7 +59,8 @@ public class ShopifyProperties {
 
     @Override
     public String toString() {
-        return "ShopifyProperties[enabled=%s, shopDomain=%s, apiVersion=%s, credentials=redacted]"
+        // 配置对象可能被日志打印，因此始终隐藏 Client ID 和 Secret。
+        return "Shopify配置[已启用=%s, 店铺域名=%s, API版本=%s, 客户端凭据=已隐藏]"
                 .formatted(enabled, shopDomain, apiVersion);
     }
 

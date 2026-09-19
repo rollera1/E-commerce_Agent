@@ -67,7 +67,7 @@ class ClientCredentialsShopifyAccessTokenProviderTest {
 
         assertThatThrownBy(() -> provider.getAccessToken(DOMAIN))
                 .isInstanceOf(ShopifyIntegrationException.class)
-                .hasMessage("Shopify client credentials were rejected")
+                .hasMessage("Shopify 拒绝了客户端凭据")
                 .message()
                 .doesNotContain(CLIENT_SECRET);
     }
@@ -77,7 +77,7 @@ class ClientCredentialsShopifyAccessTokenProviderTest {
         var credentials = new ShopifyClientCredentials("test-client", CLIENT_SECRET);
 
         assertThat(credentials.toString())
-                .isEqualTo("ShopifyClientCredentials[redacted]")
+                .isEqualTo("Shopify客户端凭据[已隐藏]")
                 .doesNotContain(CLIENT_SECRET);
     }
 

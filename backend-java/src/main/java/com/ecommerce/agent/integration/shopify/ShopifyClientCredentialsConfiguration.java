@@ -10,8 +10,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
 
+/** Shopify 启用时创建令牌、Admin API 和店铺连接相关组件。 */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(ShopifyProperties.class)
+// 只有显式启用 Shopify 时才创建真实外部调用组件。
 @ConditionalOnProperty(prefix = "shopify", name = "enabled", havingValue = "true")
 public class ShopifyClientCredentialsConfiguration {
 

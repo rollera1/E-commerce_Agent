@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 提供 Java、MySQL 和 Python 的健康检查接口。 */
 @RestController
 @RequestMapping("/api/health")
 public class HealthController {
@@ -35,6 +36,7 @@ public class HealthController {
     @GetMapping("/python")
     public ResponseEntity<IntegrationHealthResponse> pythonHealth() {
         PythonHealthResponse python = pythonHealthClient.checkHealth();
+        // Python 可访问但自身状态异常时，Java 对外报告 degraded。
         String status = "ok".equals(python.status()) ? "ok" : "degraded";
         return ResponseEntity.ok(new IntegrationHealthResponse(status, "backend-java", python));
     }
@@ -44,6 +46,7 @@ public class HealthController {
         return databaseHealthService.checkHealth();
     }
 
+    /** Java 调用 Python 后组合得到的健康状态。 */
     public record IntegrationHealthResponse(
             String status,
             String caller,

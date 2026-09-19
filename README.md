@@ -1,6 +1,6 @@
 # 基于多 Agent 的电商自动化运营系统
 
-当前代码已进入第二批次：在第一周 Java、Python、React 与服务器 MySQL 工程骨架上，增加 Shopify 开发店铺授权、GraphQL 店铺信息查询和连接状态页面。CJdropshipping 将在后续批次接入。
+当前代码已进入第三周：已完成真实 CJ 来源商品到 DeepSeek Copy/SEO Agent、MySQL 待审核记录和商家人工审核页面的业务闭环。CJdropshipping 列表、关键词搜索和基础详情，以及 `deepseek-v4-flash` 结构化生成均已在线验收。
 
 ## 目录
 
@@ -44,6 +44,8 @@ SHOPIFY_CLIENT_SECRET=Dev-Dashboard-中的-Client-Secret
 ```
 
 当前实现使用 Shopify 的 Client Credentials Grant，适用于应用和 Development Store 同在一个 Dev Dashboard 组织的开发场景。应用需要先在 Dev Dashboard 中选择 `write_products,read_orders` 权限并安装到该开发店铺。如果不在同一组织，先不要启用上述配置，需要改用嵌入式应用的 Token Exchange 授权流程。
+
+CJ 商品源默认使用 Fake。需要在线验收时，只在本地 `.env` 中设置 `CJ_ENABLED=true` 和 `CJ_API_KEY`；Python 启动脚本会读取该文件。API Key、access token 和 refresh token 均不得写入 Git、日志或返回前端。
 
 ### 2. 打开数据库 SSH 隧道
 
@@ -154,8 +156,16 @@ npm.cmd run build
 | `GET` | `http://localhost:8005/health` | Python 服务自身健康检查 |
 | `GET` | `/api/shopify/connection` | 查看 Shopify 是否配置及已保存的店铺元数据 |
 | `POST` | `/api/shopify/connection` | 申请短期令牌，执行真实 GraphQL 查询并保存店铺连接 |
+| `GET` | `/api/source-products` | 搜索标准化来源商品（当前为 Fake） |
+| `GET` | `/api/source-products/{sourceProductId}` | 查看标准化来源商品详情 |
+| `POST` | `/api/source-products/{sourceProductId}/copy-seo-generations` | 调用 Python Copy/SEO Agent 并保存待审核结果 |
+| `PUT` | `/api/copy-seo-generations/{generationId}/content` | 保存商家对生成内容的修改 |
+| `POST` | `/api/copy-seo-generations/{generationId}/accept` | 接受生成内容；重复接受幂等 |
+| `POST` | `/api/copy-seo-generations/{generationId}/reject` | 拒绝生成内容；重复拒绝幂等 |
 
 Shopify 访问令牌只缓存在 Java 进程内并在过期前刷新，不返回前端、不写入数据库。数据库仅保存店铺 ID、域名、名称、币种和验证时间。任何真实业务密钥都只能写入本地 `.env`，不得提交到 Git。
+
+Copy/SEO Agent 在 `LLM_ENABLED=false` 时使用确定性 Fake；启用后使用本地 `.env` 配置的 DeepSeek。真实结果记录模型、Agent 版本、提示词版本和耗时，且必须经过结构校验与商家审核。商家接受内容只改变审核状态，不会自动创建或发布 Shopify 商品。
 
 ## 第二批次验收结果
 

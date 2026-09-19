@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+/** 通过 HTTP 调用 Python 商品来源服务。 */
 @Component
 public class PythonProductSourceClient implements ProductSourceGateway {
 
@@ -21,11 +22,13 @@ public class PythonProductSourceClient implements ProductSourceGateway {
     }
 
     PythonProductSourceClient(RestClient restClient) {
+        // 允许测试传入 Mock RestClient。
         this.restClient = restClient;
     }
 
     @Override
     public SourceProductPage list(String keyword, int page, int pageSize) {
+        // keyword 为空时不向 Python 发送该查询参数。
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/internal/product-sources/products")

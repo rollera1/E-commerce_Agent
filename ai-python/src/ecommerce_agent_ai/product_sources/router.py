@@ -2,12 +2,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 
-from ecommerce_agent_ai.product_sources.fake import FakeProductSource
+from ecommerce_agent_ai.product_sources.factory import build_product_source
 from ecommerce_agent_ai.product_sources.models import SourceProduct, SourceProductPage
 from ecommerce_agent_ai.product_sources.port import ProductSource
 
 router = APIRouter(prefix="/internal/product-sources", tags=["product-sources"])
-product_source: ProductSource = FakeProductSource()
+product_source: ProductSource = build_product_source()
 
 
 @router.get("/products", response_model=SourceProductPage)

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import ProductWorkspace from './ProductWorkspace'
 
 type CheckState = 'idle' | 'loading' | 'ok' | 'error'
 type ShopifyConnectionState = 'NOT_CONFIGURED' | 'DISCONNECTED' | 'CONNECTED'
@@ -206,6 +207,8 @@ function App() {
 
         <p className="result-message" role="status">{details}</p>
       </section>
+
+      <ProductWorkspace />
 
       <section className="roadmap" aria-labelledby="mvp-title">
         <p className="section-kicker">MVP 主线</p>

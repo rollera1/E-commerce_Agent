@@ -1,3 +1,5 @@
+#python 管理项目配置和依赖 格式
+
 [project]
 name = "ecommerce-agent-ai"
 version = "0.1.0"
@@ -22,8 +24,8 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.ruff]
-line-length = 100
-target-version = "py312"
+line-length = 100  #一行代码最长100字符
+target-version = "py312" #目标 Python 版本 = 3.12
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

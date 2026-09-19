@@ -76,7 +76,7 @@ class ShopifyConnectionControllerTest {
     @Test
     void returnsActionableErrorWhenShopifyIsNotConfigured() throws Exception {
         when(connectionService.connect()).thenThrow(
-                new ShopifyNotConfiguredException("Shopify connection is not enabled."));
+                new ShopifyNotConfiguredException("Shopify 连接功能尚未启用"));
 
         mockMvc.perform(post("/api/shopify/connection"))
                 .andExpect(status().isServiceUnavailable())
@@ -88,13 +88,13 @@ class ShopifyConnectionControllerTest {
     void returnsSanitizedShopifyError() throws Exception {
         when(connectionService.connect()).thenThrow(new ShopifyIntegrationException(
                 ShopifyErrorCode.INSUFFICIENT_SCOPE,
-                "Shopify rejected the configured access scopes"));
+                "Shopify 拒绝了当前配置的访问权限"));
 
         mockMvc.perform(post("/api/shopify/connection"))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.service").value("shopify"))
                 .andExpect(jsonPath("$.errorCode").value("INSUFFICIENT_SCOPE"))
                 .andExpect(jsonPath("$.message").value(
-                        "Shopify rejected the configured access scopes"));
+                        "Shopify 拒绝了当前配置的访问权限"));
     }
 }
