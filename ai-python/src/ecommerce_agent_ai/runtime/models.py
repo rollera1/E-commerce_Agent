@@ -133,9 +133,7 @@ class AgentEvent(Base):
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
     stage: Mapped[str] = mapped_column(String(80), nullable=False)
-    summary: Mapped[dict[str, Any]] = mapped_column(
-        JSON_DOCUMENT, nullable=False, default=dict
-    )
+    summary: Mapped[dict[str, Any]] = mapped_column(JSON_DOCUMENT, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )

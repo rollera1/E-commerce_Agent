@@ -180,7 +180,7 @@ class AgentRuntimeRepository:
         with Session(self._engine) as session, session.begin():
             result = session.execute(
                 update(AgentRun)
-                .where(*self._fence(run_id, worker_id, lease_version))
+                .where(*self._fence(run_id, worker_id, lease_version, current_time))
                 .values(
                     lease_expires_at=current_time + timedelta(seconds=lease_seconds),
                     updated_at=current_time,
@@ -200,7 +200,7 @@ class AgentRuntimeRepository:
     ) -> bool:
         current_time = now or datetime.now(UTC)
         with Session(self._engine) as session, session.begin():
-            run = self._locked_fenced_run(session, run_id, worker_id, lease_version)
+            run = self._locked_fenced_run(session, run_id, worker_id, lease_version, current_time)
             if run is None:
                 return False
             run.stage = stage
@@ -223,7 +223,7 @@ class AgentRuntimeRepository:
     ) -> bool:
         current_time = now or datetime.now(UTC)
         with Session(self._engine) as session, session.begin():
-            run = self._locked_fenced_run(session, run_id, worker_id, lease_version)
+            run = self._locked_fenced_run(session, run_id, worker_id, lease_version, current_time)
             if run is None or run.cancel_requested_at is not None:
                 return False
             latest_version = session.scalar(
@@ -266,7 +266,7 @@ class AgentRuntimeRepository:
     ) -> bool:
         current_time = now or datetime.now(UTC)
         with Session(self._engine) as session, session.begin():
-            run = self._locked_fenced_run(session, run_id, worker_id, lease_version)
+            run = self._locked_fenced_run(session, run_id, worker_id, lease_version, current_time)
             if run is None:
                 return False
             run.status = RunStatus.FAILED
@@ -331,7 +331,7 @@ class AgentRuntimeRepository:
     ) -> bool:
         current_time = now or datetime.now(UTC)
         with Session(self._engine) as session, session.begin():
-            run = self._locked_fenced_run(session, run_id, worker_id, lease_version)
+            run = self._locked_fenced_run(session, run_id, worker_id, lease_version, current_time)
             if run is None or run.cancel_requested_at is None:
                 return False
             run.status = RunStatus.CANCELLED
@@ -383,19 +383,27 @@ class AgentRuntimeRepository:
             return len(runs)
 
     @staticmethod
-    def _fence(run_id: str, worker_id: str, lease_version: int) -> tuple[Any, ...]:
+    def _fence(run_id: str, worker_id: str, lease_version: int, now: datetime) -> tuple[Any, ...]:
         return (
             AgentRun.run_id == run_id,
             AgentRun.status == RunStatus.RUNNING,
             AgentRun.lease_owner == worker_id,
             AgentRun.lease_version == lease_version,
+            AgentRun.lease_expires_at >= now,
         )
 
     def _locked_fenced_run(
-        self, session: Session, run_id: str, worker_id: str, lease_version: int
+        self,
+        session: Session,
+        run_id: str,
+        worker_id: str,
+        lease_version: int,
+        now: datetime,
     ) -> AgentRun | None:
         return session.scalar(
-            select(AgentRun).where(*self._fence(run_id, worker_id, lease_version)).with_for_update()
+            select(AgentRun)
+            .where(*self._fence(run_id, worker_id, lease_version, now))
+            .with_for_update()
         )
 
     @staticmethod

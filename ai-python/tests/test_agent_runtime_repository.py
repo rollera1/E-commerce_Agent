@@ -61,6 +61,13 @@ def test_expired_lease_can_be_reclaimed_and_stale_worker_is_fenced() -> None:
         lease_seconds=120,
         now=start + timedelta(seconds=30),
     )
+    assert not repository.update_stage(
+        run_id=run.run_id,
+        worker_id="worker-1",
+        lease_version=1,
+        stage="TOO_LATE",
+        now=start + timedelta(seconds=151),
+    )
 
     second = repository.claim_next(
         worker_id="worker-2", lease_seconds=120, now=start + timedelta(seconds=151)
@@ -77,6 +84,7 @@ def test_expired_lease_can_be_reclaimed_and_stale_worker_is_fenced() -> None:
         agent_version="v1",
         prompt_version="p1",
         model="fake",
+        now=start + timedelta(seconds=152),
     )
     assert repository.complete(
         run_id=run.run_id,
@@ -87,6 +95,7 @@ def test_expired_lease_can_be_reclaimed_and_stale_worker_is_fenced() -> None:
         agent_version="v1",
         prompt_version="p1",
         model="fake",
+        now=start + timedelta(seconds=152),
     )
     assert repository.get(run.run_id).status == RunStatus.SUCCEEDED  # type: ignore[union-attr]
     assert repository.get_latest_artifact(run.run_id, "COPY_SEO_RESULT").payload == {  # type: ignore[union-attr]
