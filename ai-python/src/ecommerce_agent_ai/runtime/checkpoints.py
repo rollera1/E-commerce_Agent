@@ -1,4 +1,6 @@
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from langgraph.checkpoint.postgres import PostgresSaver
 
@@ -16,3 +18,13 @@ def setup_checkpoint_tables(settings: AgentRuntimeSettings | None = None) -> Non
     os.environ.setdefault("LANGGRAPH_STRICT_MSGPACK", "true")
     with PostgresSaver.from_conn_string(checkpoint_connection_string(settings)) as saver:
         saver.setup()
+
+
+@contextmanager
+def open_checkpoint_saver(
+    settings: AgentRuntimeSettings | None = None,
+) -> Iterator[PostgresSaver]:
+    """打开由 Worker 独占生命周期的 PostgreSQL checkpoint 存储。"""
+    os.environ.setdefault("LANGGRAPH_STRICT_MSGPACK", "true")
+    with PostgresSaver.from_conn_string(checkpoint_connection_string(settings)) as saver:
+        yield saver

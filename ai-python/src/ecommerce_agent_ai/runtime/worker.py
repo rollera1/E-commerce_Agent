@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from uuid import uuid4
 
+from ecommerce_agent_ai.runtime.checkpoints import open_checkpoint_saver
 from ecommerce_agent_ai.runtime.config import AgentRuntimeSettings
 from ecommerce_agent_ai.runtime.database import create_runtime_engine
 from ecommerce_agent_ai.runtime.executor import (
@@ -143,16 +144,17 @@ def main() -> None:
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
     settings = AgentRuntimeSettings.from_env()
     repository = AgentRuntimeRepository(create_runtime_engine(settings), settings.max_claims)
-    executor = CopySeoRunExecutor()
     worker_id = f"{socket.gethostname()}:{os.getpid()}:{str(uuid4())[:8]}"
-    worker = AgentWorker(repository, executor.execute, settings, worker_id)
-    logger.info("Agent worker started: %s", worker_id)
-    try:
-        while True:
-            if not worker.run_once():
-                time.sleep(settings.poll_interval_seconds)
-    except KeyboardInterrupt:
-        logger.info("Agent worker stopped")
+    with open_checkpoint_saver(settings) as checkpointer:
+        executor = CopySeoRunExecutor(checkpointer=checkpointer)
+        worker = AgentWorker(repository, executor.execute, settings, worker_id)
+        logger.info("Agent worker started: %s", worker_id)
+        try:
+            while True:
+                if not worker.run_once():
+                    time.sleep(settings.poll_interval_seconds)
+        except KeyboardInterrupt:
+            logger.info("Agent worker stopped")
 
 
 if __name__ == "__main__":

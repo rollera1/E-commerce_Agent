@@ -1,3 +1,4 @@
+from langgraph.checkpoint.memory import InMemorySaver
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
@@ -134,3 +135,45 @@ def test_copy_executor_retries_one_transient_failure() -> None:
     )
     assert agent.calls == 2
     assert result.payload["reviewStatus"] == "PENDING_REVIEW"
+
+
+def test_copy_executor_reuses_durable_structured_result() -> None:
+    class CountingAgent:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.delegate = FakeCopySeoAgent()
+
+        def generate(self, source_product_id: str, target_market: str, language: str):
+            self.calls += 1
+            return self.delegate.generate(source_product_id, target_market, language)
+
+    agent = CountingAgent()
+    checkpointer = InMemorySaver()
+    first_executor = CopySeoRunExecutor(
+        agent,
+        checkpointer=checkpointer,
+        retry_delay_seconds=0,
+    )
+    claimed = ClaimedRun(
+        run_id="durable-run-1",
+        agent_type="COPY_SEO",
+        request_payload={
+            "sourceProductId": "fake-desk-lamp-001",
+            "targetMarket": "US",
+            "language": "en",
+        },
+        worker_id="worker-1",
+        lease_version=1,
+        claim_count=1,
+    )
+
+    first = first_executor.execute(claimed)
+    restarted_executor = CopySeoRunExecutor(
+        agent,
+        checkpointer=checkpointer,
+        retry_delay_seconds=0,
+    )
+    second = restarted_executor.execute(claimed)
+
+    assert agent.calls == 1
+    assert second.payload == first.payload

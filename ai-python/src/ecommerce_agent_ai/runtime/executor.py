@@ -2,12 +2,14 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from pydantic import ValidationError
 
 from ecommerce_agent_ai.agents.copy_seo.errors import CopySeoAgentError
 from ecommerce_agent_ai.agents.copy_seo.factory import build_copy_seo_agent
-from ecommerce_agent_ai.agents.copy_seo.models import CopySeoGenerationRequest
+from ecommerce_agent_ai.agents.copy_seo.models import CopySeoGeneration, CopySeoGenerationRequest
 from ecommerce_agent_ai.agents.copy_seo.port import CopySeoAgent
+from ecommerce_agent_ai.runtime.copy_seo_graph import DurableCopySeoGraph
 from ecommerce_agent_ai.runtime.repository import ClaimedRun
 
 
@@ -34,10 +36,14 @@ class CopySeoRunExecutor:
         self,
         agent: CopySeoAgent | None = None,
         *,
+        checkpointer: BaseCheckpointSaver | None = None,
         transient_retries: int = 1,
         retry_delay_seconds: float = 1.0,
     ) -> None:
         self._agent = agent or build_copy_seo_agent()
+        self._durable_graph = (
+            DurableCopySeoGraph(self._agent, checkpointer) if checkpointer is not None else None
+        )
         self._transient_retries = transient_retries
         self._retry_delay_seconds = retry_delay_seconds
 
@@ -51,11 +57,7 @@ class CopySeoRunExecutor:
 
         for attempt in range(self._transient_retries + 1):
             try:
-                generation = self._agent.generate(
-                    request.source_product_id,
-                    request.target_market,
-                    request.language,
-                )
+                generation = self._generate(claimed.run_id, request)
                 return ExecutionResult(
                     artifact_type="COPY_SEO_RESULT",
                     payload=generation.model_dump(mode="json", by_alias=True),
@@ -69,3 +71,17 @@ class CopySeoRunExecutor:
                 if self._retry_delay_seconds > 0:
                     time.sleep(self._retry_delay_seconds)
         raise AssertionError("重试循环必须返回或抛出异常")
+
+    def _generate(self, run_id: str, request: CopySeoGenerationRequest) -> CopySeoGeneration:
+        if self._durable_graph is not None:
+            return self._durable_graph.generate(
+                run_id,
+                request.source_product_id,
+                request.target_market,
+                request.language,
+            )
+        return self._agent.generate(
+            request.source_product_id,
+            request.target_market,
+            request.language,
+        )
