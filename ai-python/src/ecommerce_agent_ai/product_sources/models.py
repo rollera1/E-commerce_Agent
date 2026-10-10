@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 
+# 数据传输对象的通用基类。
 class ApiModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -38,6 +39,7 @@ class SourceProduct(ApiModel):
     variants: list[SourceVariant]
     source_url: str
     fetched_at: datetime
+    inventory_total: int | None = Field(default=None, ge=0)
 
 
 class SourceProductPage(ApiModel):

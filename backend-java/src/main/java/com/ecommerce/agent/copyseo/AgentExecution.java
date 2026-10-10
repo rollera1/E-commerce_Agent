@@ -1,6 +1,6 @@
 package com.ecommerce.agent.copyseo;
 
-/** 一次 Agent 执   行的基本信息。 */
+/** 一次 Agent 执行的基本信息。 */
 public record AgentExecution(
         // Agent 名称。
         String agent,

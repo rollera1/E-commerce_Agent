@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,13 +36,25 @@ class CopySeoGenerationServiceTest {
         assertThat(result.status()).isEqualTo(GenerationStatus.SUCCEEDED);
         assertThat(result.reviewStatus()).isEqualTo(ReviewStatus.PENDING_REVIEW);
         assertThat(result.content().title()).contains("Desk Lamp");
+        assertThat(result.trace().outcome()).isEqualTo(AgentOutcome.COMPLETED);
+        assertThat(result.trace().toolCalls()).hasSize(1);
         verify(repository).save(any(CopySeoGeneration.class));
     }
 
     @Test
     void persistsAgentFailureWithErrorTypeAndWithoutReviewableContent() {
+        var failureTrace = new AgentTrace(
+                "COMPLIANCE_REVIEW",
+                AgentOutcome.NEEDS_HUMAN_INPUT,
+                List.of("GENERATE_CONTENT", "CHECK_COMPLIANCE"),
+                List.of(),
+                2,
+                1,
+                List.of("UNSUPPORTED_CLAIM:lifetime warranty"),
+                "HUMAN_CONTENT_REVIEW");
         when(agentGateway.generate("fake-desk-lamp-001", "US", "en"))
-                .thenThrow(new CopySeoAgentException("RATE_LIMITED", true, null));
+                .thenThrow(new CopySeoAgentException(
+                        "CONTENT_REQUIRES_HUMAN_REVIEW", false, failureTrace, null));
         when(repository.save(any(CopySeoGeneration.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         var service = new CopySeoGenerationService(agentGateway, repository);
@@ -52,8 +65,9 @@ class CopySeoGenerationServiceTest {
         assertThat(result.status()).isEqualTo(GenerationStatus.FAILED);
         assertThat(result.reviewStatus()).isEqualTo(ReviewStatus.NOT_APPLICABLE);
         assertThat(result.content()).isNull();
-        assertThat(result.failure().errorType()).isEqualTo("RATE_LIMITED");
-        assertThat(result.failure().retryable()).isTrue();
+        assertThat(result.failure().errorType()).isEqualTo("CONTENT_REQUIRES_HUMAN_REVIEW");
+        assertThat(result.failure().retryable()).isFalse();
+        assertThat(result.trace()).isEqualTo(failureTrace);
         verify(repository).save(any(CopySeoGeneration.class));
     }
 
@@ -151,6 +165,20 @@ class CopySeoGenerationServiceTest {
                         "Adjustable LED Desk Lamp | Home Office Lighting",
                         "A compact adjustable LED desk lamp for home offices.",
                         List.of("desk lamp", "home office")),
-                new AgentExecution("COPY_SEO", "fake-v1", "copy-seo-v1", "fake", 0));
+                new AgentExecution("COPY_SEO", "copy-seo-agent-v2", "copy-seo-v1", "fake", 0),
+                new AgentTrace(
+                        "AWAIT_MERCHANT_REVIEW",
+                        AgentOutcome.COMPLETED,
+                        List.of("COLLECT_PRODUCT_CONTEXT", "AWAIT_MERCHANT_REVIEW"),
+                        List.of(new ToolCallTrace(
+                                "get_product_detail",
+                                ToolCallStatus.SUCCEEDED,
+                                0,
+                                Map.of("variantCount", 1),
+                                null)),
+                        1,
+                        0,
+                        List.of(),
+                        "MERCHANT_REVIEW"));
     }
 }

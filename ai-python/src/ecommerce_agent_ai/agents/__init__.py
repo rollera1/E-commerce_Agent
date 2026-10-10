@@ -1,1 +1,1 @@
-"""Agent contracts and implementations."""
+"""Agent 接口与实现。"""

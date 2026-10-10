@@ -34,6 +34,7 @@ def test_lists_standardized_source_products() -> None:
         ],
         "sourceUrl": "https://example.invalid/products/fake-desk-lamp-001",
         "fetchedAt": "2026-09-02T00:00:00Z",
+        "inventoryTotal": 50,
     }
 
 

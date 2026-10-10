@@ -1,6 +1,7 @@
 package com.ecommerce.agent.integration.python;
 
 import com.ecommerce.agent.copyseo.AgentGeneration;
+import com.ecommerce.agent.copyseo.AgentTrace;
 import com.ecommerce.agent.copyseo.CopySeoAgentException;
 import com.ecommerce.agent.copyseo.CopySeoAgentGateway;
 import java.util.Map;
@@ -43,7 +44,10 @@ public class PythonCopySeoAgentClient implements CopySeoAgentGateway {
             String errorType = detail == null || detail.errorCode() == null
                     ? "PYTHON_AGENT_ERROR" : detail.errorCode();
             throw new CopySeoAgentException(
-                    errorType, detail != null && detail.retryable(), exception);
+                    errorType,
+                    detail != null && detail.retryable(),
+                    detail == null ? null : detail.trace(),
+                    exception);
         }
     }
 
@@ -52,6 +56,6 @@ public class PythonCopySeoAgentClient implements CopySeoAgentGateway {
     }
 
     /** Python 错误响应中的具体错误信息。 */
-    private record ErrorDetail(String errorCode, boolean retryable) {
+    private record ErrorDetail(String errorCode, boolean retryable, AgentTrace trace) {
     }
 }

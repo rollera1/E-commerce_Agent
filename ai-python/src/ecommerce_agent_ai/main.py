@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from ecommerce_agent_ai.agents.copy_seo.router import router as copy_seo_router
+from ecommerce_agent_ai.agents.product_selection.router import (
+    router as product_selection_router,
+)
 from ecommerce_agent_ai.product_sources.router import router as product_sources_router
 
 
@@ -18,6 +21,7 @@ app = FastAPI(
 )
 app.include_router(product_sources_router)
 app.include_router(copy_seo_router)
+app.include_router(product_selection_router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])

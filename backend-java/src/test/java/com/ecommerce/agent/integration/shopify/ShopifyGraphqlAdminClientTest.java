@@ -12,6 +12,10 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest;
 
 import com.ecommerce.agent.saleschannel.ShopifyStoreDomain;
+import com.ecommerce.agent.saleschannel.ShopifyProductCommand;
+import com.ecommerce.agent.saleschannel.ShopifyVariantCommand;
+import java.math.BigDecimal;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -99,5 +103,93 @@ class ShopifyGraphqlAdminClientTest {
                 .hasMessage("Shopify 拒绝了 GraphQL 查询")
                 .message()
                 .doesNotContain("remote detail");
+    }
+
+    @Test
+    void readsLocationsAndPublicationsWithoutExposingCredentials() {
+        expectSuccess("""
+                {"data":{"locations":{"nodes":[{"id":"loc-1","name":"Main","isActive":true}]}}}
+                """);
+        expectSuccess("""
+                {"data":{"publications":{"nodes":[{"id":"pub-1","autoPublish":false,"catalog":{"title":"Online Store"}}]}}}
+                """);
+
+        var locations = client.fetchLocations(domain());
+        var publications = client.fetchPublications(domain());
+
+        assertThat(locations).extracting("name").containsExactly("Main");
+        assertThat(publications).extracting("title").containsExactly("Online Store");
+        server.verify();
+    }
+
+    @Test
+    void createsDraftVariantsThenActivatesAndPublishes() {
+        expectSuccess("""
+                {"data":{"productCreate":{"product":{"id":"gid://shopify/Product/1","status":"DRAFT","media":{"nodes":[]}},"userErrors":[]}}}
+                """);
+        expectSuccess("""
+                {"data":{"productVariantsBulkCreate":{"productVariants":[{"id":"variant-1","inventoryItem":{"id":"inventory-1"}}],"userErrors":[]}}}
+                """);
+        expectSuccess("""
+                {"data":{"productUpdate":{"product":{"id":"gid://shopify/Product/1","status":"ACTIVE"},"userErrors":[]}}}
+                """);
+        expectSuccess("""
+                {"data":{"publishablePublish":{"publishable":{"publishedOnPublication":true},"userErrors":[]}}}
+                """);
+
+        var draft = client.createDraft(domain(), new ShopifyProductCommand(
+                "Lamp", "<p>Lamp</p>", "Lamp", "Lamp meta", List.of("lamp"),
+                List.of(), List.of("Black")));
+        var variants = client.createVariants(domain(), draft.productId(), "loc-1", List.of(
+                new ShopifyVariantCommand("source-v1", "Black", "SKU-1", new BigDecimal("19.99"), 10)));
+        client.activateProduct(domain(), draft.productId());
+        client.publishProduct(domain(), draft.productId(), "pub-1");
+
+        assertThat(draft.mediaReady()).isTrue();
+        assertThat(variants).extracting("variantId").containsExactly("variant-1");
+        server.verify();
+    }
+
+    @Test
+    void mapsMutationUserErrorsToStableBusinessError() {
+        expectSuccess("""
+                {"data":{"productCreate":{"product":null,"userErrors":[{"field":["product","title"],"message":"bad title"}]}}}
+                """);
+
+        assertThatThrownBy(() -> client.createDraft(domain(), new ShopifyProductCommand(
+                "Lamp", "<p>Lamp</p>", "Lamp", "Lamp meta", List.of("lamp"), List.of(), List.of("Default"))))
+                .isInstanceOf(ShopifyIntegrationException.class)
+                .extracting("code")
+                .isEqualTo(ShopifyErrorCode.USER_ERROR);
+    }
+
+    @Test
+    void replacesDraftMediaByDeletingExistingMediaThenAddingNewImages() {
+        expectSuccess("""
+                {"data":{"product":{"media":{"nodes":[{"id":"gid://shopify/MediaImage/1","preview":{"status":"READY"}}]}}}}
+                """);
+        expectSuccess("""
+                {"data":{"productDeleteMedia":{"deletedMediaIds":["gid://shopify/MediaImage/1"],"mediaUserErrors":[]}}}
+                """);
+        expectSuccess("""
+                {"data":{"productUpdate":{"product":{"id":"gid://shopify/Product/1","media":{"nodes":[{"id":"gid://shopify/MediaImage/2","preview":{"status":"PROCESSING"}}]}},"userErrors":[]}}}
+                """);
+
+        client.replaceProductMedia(
+                domain(), "gid://shopify/Product/1", "Lamp",
+                List.of("https://example.invalid/new-image.jpg"));
+
+        server.verify();
+    }
+
+    private void expectSuccess(String body) {
+        server.expect(requestTo("https://sample-store.myshopify.com/admin/api/2026-07/graphql.json"))
+                .andExpect(method(POST))
+                .andExpect(header("X-Shopify-Access-Token", "secret-test-token"))
+                .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+    }
+
+    private ShopifyStoreDomain domain() {
+        return new ShopifyStoreDomain("sample-store.myshopify.com");
     }
 }

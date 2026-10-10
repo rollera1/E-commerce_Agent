@@ -89,6 +89,10 @@ public class CopySeoGeneration {
     // 失败后是否适合重试；成功记录为空。
     @Column(name = "retryable")
     private Boolean retryable;
+    // Agent 工具调用、步骤和回退轨迹，以 JSON 保存到 TEXT。
+    @Convert(converter = AgentTraceJsonConverter.class)
+    @Column(name = "agent_trace", columnDefinition = "TEXT")
+    private AgentTrace trace;
     // 记录创建时间。
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -113,6 +117,7 @@ public class CopySeoGeneration {
         this.promptVersion = generated.execution().promptVersion();
         this.model = generated.execution().model();
         this.durationMs = generated.execution().durationMs();
+        this.trace = generated.trace();
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -144,6 +149,7 @@ public class CopySeoGeneration {
         generation.durationMs = durationMs;
         generation.errorType = failure.errorType();
         generation.retryable = failure.retryable();
+        generation.trace = failure.trace();
         generation.createdAt = now;
         generation.updatedAt = now;
         return generation;
@@ -169,28 +175,28 @@ public class CopySeoGeneration {
     }
 
     public void accept(Instant now) {
-        if (reviewStatus == ReviewStatus.ACCEPTED) {
-            // 重复接受不改变记录，保证接口幂等。
-            return;
-        }
-        if (reviewStatus != ReviewStatus.PENDING_REVIEW) {
-            throw new CopySeoReviewConflictException(
-                    "已拒绝或不可审核的文案与 SEO 内容不能接受");
-        }
-        this.reviewStatus = ReviewStatus.ACCEPTED;
-        this.updatedAt = now;
+        review(ReviewStatus.ACCEPTED, now, "已拒绝或不可审核的文案与 SEO 内容不能接受");
     }
 
     public void reject(Instant now) {
-        if (reviewStatus == ReviewStatus.REJECTED) {
-            // 重复拒绝不改变记录，保证接口幂等。
-            return;
-        }
+        review(ReviewStatus.REJECTED, now, "已接受或不可审核的文案与 SEO 内容不能拒绝");
+    }
+
+    private void review(ReviewStatus decision, Instant now, String conflictMessage) {
+        // 重复审核不更新时间，保持原有幂等行为。
+        if (reviewStatus == decision) return;
         if (reviewStatus != ReviewStatus.PENDING_REVIEW) {
-            throw new CopySeoReviewConflictException(
-                    "已接受或不可审核的文案与 SEO 内容不能拒绝");
+            throw new CopySeoReviewConflictException(conflictMessage);
         }
-        this.reviewStatus = ReviewStatus.REJECTED;
+        this.reviewStatus = decision;
+        this.updatedAt = now;
+    }
+
+    public void reopen(Instant now) {
+        if (reviewStatus != ReviewStatus.ACCEPTED) {
+            throw new CopySeoReviewConflictException("只有已接受且未发布的内容可以退回编辑");
+        }
+        this.reviewStatus = ReviewStatus.PENDING_REVIEW;
         this.updatedAt = now;
     }
 
@@ -206,6 +212,7 @@ public class CopySeoGeneration {
                 generationId, sourceProductId, targetMarket, language, status, reviewStatus,
                 content,
                 new AgentExecution(agent, agentVersion, promptVersion, model, durationMs),
+                trace,
                 failure);
     }
 }

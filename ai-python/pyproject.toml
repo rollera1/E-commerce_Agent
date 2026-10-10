@@ -1,4 +1,5 @@
-#python 管理项目配置和依赖 格式
+# Python 项目配置和依赖管理文件。
+# 本文件使用 TOML 语法。
 
 [project]
 name = "ecommerce-agent-ai"
@@ -9,6 +10,9 @@ requires-python = "==3.12.*"
 dependencies = [
     "fastapi==0.141.1",
     "httpx==0.28.1",
+    "langchain==1.4.2",
+    "langchain-openai==1.6.2",
+    "langgraph==1.2.11",
     "pydantic==2.13.4",
     "uvicorn==0.52.4",
 ]
@@ -24,8 +28,8 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.ruff]
-line-length = 100  #一行代码最长100字符
-target-version = "py312" #目标 Python 版本 = 3.12
+line-length = 100  # 每行代码最多 100 个字符。
+target-version = "py312"  # 目标 Python 版本为 3.12。
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

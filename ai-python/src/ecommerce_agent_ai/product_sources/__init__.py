@@ -1,1 +1,1 @@
-"""Product-source domain and adapters."""
+"""商品来源领域模型与适配器。"""

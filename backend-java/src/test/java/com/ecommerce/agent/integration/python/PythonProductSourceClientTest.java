@@ -37,6 +37,7 @@ class PythonProductSourceClientTest {
         assertThat(result.total()).isEqualTo(1);
         assertThat(result.items()).hasSize(1);
         assertThat(result.items().getFirst().sourceProductId()).isEqualTo("fake-desk-lamp-001");
+        assertThat(result.items().getFirst().inventoryTotal()).isEqualTo(123);
         assertThat(result.items().getFirst().price().amount())
                 .isEqualByComparingTo(new BigDecimal("29.90"));
         assertThat(result.items().getFirst().variants().getFirst().sku())
@@ -54,6 +55,7 @@ class PythonProductSourceClientTest {
                     "description": "A compact dimmable desk lamp for home offices.",
                     "images": ["https://example.invalid/products/desk-lamp-001.jpg"],
                     "price": {"amount": "29.90", "currency": "USD"},
+                    "inventoryTotal": 123,
                     "variants": [{
                       "sourceVariantId": "fake-desk-lamp-black",
                       "sku": "FAKE-LAMP-BLK",

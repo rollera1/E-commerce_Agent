@@ -11,7 +11,7 @@ from ecommerce_agent_ai.product_sources.models import (
 
 
 class FakeProductSource:
-    """Deterministic product source for development and automated tests."""
+    """供开发和自动化测试使用的确定性商品来源。"""
 
     def __init__(self) -> None:
         self._products = (_desk_lamp(),)
@@ -64,4 +64,5 @@ def _desk_lamp() -> SourceProduct:
         ],
         source_url="https://example.invalid/products/fake-desk-lamp-001",
         fetched_at=datetime(2026, 9, 2, tzinfo=UTC),
+        inventory_total=50,
     )

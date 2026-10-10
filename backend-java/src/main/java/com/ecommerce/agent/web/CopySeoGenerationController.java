@@ -4,6 +4,11 @@ import com.ecommerce.agent.copyseo.CopySeoGenerationRequest;
 import com.ecommerce.agent.copyseo.CopySeoGenerationService;
 import com.ecommerce.agent.copyseo.CopySeoGenerationView;
 import com.ecommerce.agent.copyseo.CopySeoContent;
+import com.ecommerce.agent.copyseo.GenerationStatus;
+import com.ecommerce.agent.productselection.ProductSelectionService;
+import com.ecommerce.agent.shopifylisting.ReviewMode;
+import com.ecommerce.agent.shopifylisting.ShopifyListingService;
+import com.ecommerce.agent.shopifylisting.ShopifyListingSettings;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -19,18 +24,34 @@ import org.springframework.web.bind.annotation.PutMapping;
 @RestController
 public class CopySeoGenerationController {
     private final CopySeoGenerationService generationService;
+    private final ProductSelectionService selectionService;
+    private final ShopifyListingService listingService;
 
-    public CopySeoGenerationController(CopySeoGenerationService generationService) {
+    public CopySeoGenerationController(
+            CopySeoGenerationService generationService,
+            ProductSelectionService selectionService,
+            ShopifyListingService listingService) {
         this.generationService = generationService;
+        this.selectionService = selectionService;
+        this.listingService = listingService;
     }
 
-    @PostMapping("/api/source-products/{sourceProductId}/copy-seo-generations")
-    /** 为指定来源商品创建一条文案生成记录。 */
+    @PostMapping("/api/product-selections/{selectionId}/copy-seo-generations")
+    /** 只为商家已经确认的来源商品创建文案生成记录。 */
     public CopySeoGenerationView generate(
-            @PathVariable String sourceProductId,
+            @PathVariable String selectionId,
             @Valid @RequestBody GenerationBody body) {
-        return generationService.generate(new CopySeoGenerationRequest(
+        String sourceProductId = selectionService.requireConfirmedSourceProduct(selectionId);
+        CopySeoGenerationView generated = generationService.generate(new CopySeoGenerationRequest(
                 sourceProductId, body.targetMarket(), body.language()));
+        if (generated.status() == GenerationStatus.SUCCEEDED && body.listingSettings() != null) {
+            listingService.configure(generated.generationId(), sourceProductId, body.listingSettings());
+            if (body.listingSettings().reviewMode() == ReviewMode.AUTO) {
+                generated = generationService.accept(generated.generationId());
+                listingService.processAccepted(generated.generationId());
+            }
+        }
+        return generated;
     }
 
     @PutMapping("/api/copy-seo-generations/{generationId}/content")
@@ -42,7 +63,7 @@ public class CopySeoGenerationController {
     }
 
     @PostMapping("/api/copy-seo-generations/{generationId}/accept")
-    /** 接受生成内容，但本阶段不会自动发布 Shopify 商品。 */
+    /** 仅接受内容；草稿创建由独立且显式的操作触发。 */
     public CopySeoGenerationView accept(@PathVariable String generationId) {
         return generationService.accept(generationId);
     }
@@ -60,6 +81,7 @@ public class CopySeoGenerationController {
             String targetMarket,
             @NotBlank(message = "目标语言不能为空")
             @Pattern(regexp = "^[a-z]{2}$", message = "目标语言必须是两位小写代码，例如 en")
-            String language) {
+            String language,
+            @Valid ShopifyListingSettings listingSettings) {
     }
 }

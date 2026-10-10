@@ -5,6 +5,7 @@ from ecommerce_agent_ai.product_sources.fake import FakeProductSource
 from ecommerce_agent_ai.product_sources.port import ProductSource
 
 
+# 根据环境变量决定使用真实商品源还是测试商品源。
 def build_product_source() -> ProductSource:
     if os.getenv("CJ_ENABLED", "false").lower() != "true":
         return FakeProductSource()

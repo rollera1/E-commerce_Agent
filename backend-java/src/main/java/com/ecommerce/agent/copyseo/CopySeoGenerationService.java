@@ -55,8 +55,7 @@ public class CopySeoGenerationService {
     @Transactional
     public CopySeoGenerationView updateContent(String generationId, CopySeoContent content) {
         // 只有数据库中真实存在的生成记录才能被修改。
-        CopySeoGeneration generation = repository.findById(generationId)
-                .orElseThrow(() -> new CopySeoGenerationNotFoundException(generationId));
+        CopySeoGeneration generation = find(generationId);
         generation.updateContent(content, clock.instant());
         return repository.save(generation).toView();
     }
@@ -73,6 +72,18 @@ public class CopySeoGenerationService {
         CopySeoGeneration generation = find(generationId);
         generation.reject(clock.instant());
         return repository.save(generation).toView();
+    }
+
+    @Transactional
+    public CopySeoGenerationView reopen(String generationId) {
+        CopySeoGeneration generation = find(generationId);
+        generation.reopen(clock.instant());
+        return repository.save(generation).toView();
+    }
+
+    @Transactional(readOnly = true)
+    public CopySeoGenerationView get(String generationId) {
+        return find(generationId).toView();
     }
 
     private CopySeoGeneration find(String generationId) {

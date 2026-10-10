@@ -36,6 +36,8 @@ class PythonCopySeoAgentClientTest {
                 .isEqualTo("9d1625ec-9c39-45c8-afc0-24e2e45b2158");
         assertThat(result.reviewStatus().name()).isEqualTo("PENDING_REVIEW");
         assertThat(result.content().seoTitle()).isEqualTo("Adjustable LED Desk Lamp");
+        assertThat(result.trace().outcome().name()).isEqualTo("COMPLETED");
+        assertThat(result.trace().toolCalls()).hasSize(1);
         server.verify();
     }
 
@@ -48,13 +50,29 @@ class PythonCopySeoAgentClientTest {
                 .andRespond(withStatus(HttpStatus.BAD_GATEWAY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body("""
-                                {"detail":{"errorCode":"TIMEOUT","retryable":true}}
+                                {
+                                  "detail":{
+                                    "errorCode":"TIMEOUT",
+                                    "retryable":true,
+                                    "trace":{
+                                      "currentStep":"COLLECT_CONTEXT",
+                                      "outcome":"NEEDS_HUMAN_INPUT",
+                                      "steps":["VALIDATE_TASK"],
+                                      "toolCalls":[],
+                                      "modelAttempts":0,
+                                      "revisionCount":0,
+                                      "validationIssues":[],
+                                      "nextAction":"HUMAN_INPUT_REQUIRED"
+                                    }
+                                  }
+                                }
                                 """));
 
         assertThatThrownBy(() -> client.generate("source-1", "US", "en"))
                 .isInstanceOfSatisfying(CopySeoAgentException.class, error -> {
                     assertThat(error.errorType()).isEqualTo("TIMEOUT");
                     assertThat(error.retryable()).isTrue();
+                    assertThat(error.trace().nextAction()).isEqualTo("HUMAN_INPUT_REQUIRED");
                 });
         server.verify();
     }
@@ -80,6 +98,22 @@ class PythonCopySeoAgentClientTest {
                     "promptVersion":"copy-seo-v1",
                     "model":"fake-deterministic",
                     "durationMs":0
+                  },
+                  "trace":{
+                    "currentStep":"AWAIT_MERCHANT_REVIEW",
+                    "outcome":"COMPLETED",
+                    "steps":["COLLECT_PRODUCT_CONTEXT","AWAIT_MERCHANT_REVIEW"],
+                    "toolCalls":[{
+                      "tool":"get_product_detail",
+                      "status":"SUCCEEDED",
+                      "durationMs":0,
+                      "summary":{"variantCount":1},
+                      "errorType":null
+                    }],
+                    "modelAttempts":1,
+                    "revisionCount":0,
+                    "validationIssues":[],
+                    "nextAction":"MERCHANT_REVIEW"
                   }
                 }
                 """;

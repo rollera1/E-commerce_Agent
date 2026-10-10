@@ -3,7 +3,11 @@ package com.ecommerce.agent.web;
 import com.ecommerce.agent.copyseo.CopySeoGenerationNotFoundException;
 import com.ecommerce.agent.copyseo.CopySeoReviewConflictException;
 import com.ecommerce.agent.integration.shopify.ShopifyIntegrationException;
+import com.ecommerce.agent.productselection.ProductSelectionConflictException;
+import com.ecommerce.agent.productselection.ProductSelectionNotFoundException;
 import com.ecommerce.agent.storeconnection.ShopifyNotConfiguredException;
+import com.ecommerce.agent.shopifylisting.ListingConflictException;
+import com.ecommerce.agent.shopifylisting.ListingNotFoundException;
 import java.time.Instant;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -16,37 +20,51 @@ import org.springframework.web.client.RestClientException;
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
+    @ExceptionHandler(ListingNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleListingNotFound(ListingNotFoundException exception) {
+        return errorResponse(HttpStatus.NOT_FOUND, "not_found", "shopify-listing",
+                "SHOPIFY_LISTING_NOT_FOUND", exception.getMessage());
+    }
+
+    @ExceptionHandler(ListingConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleListingConflict(ListingConflictException exception) {
+        return errorResponse(HttpStatus.CONFLICT, "conflict", "shopify-listing",
+                "SHOPIFY_LISTING_CONFLICT", exception.getMessage());
+    }
+
+    @ExceptionHandler(ProductSelectionNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleProductSelectionNotFound(
+            ProductSelectionNotFoundException exception) {
+        return errorResponse(HttpStatus.NOT_FOUND, "not_found", "product-selection",
+                "PRODUCT_SELECTION_NOT_FOUND", exception.getMessage());
+    }
+
+    @ExceptionHandler(ProductSelectionConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleProductSelectionConflict(
+            ProductSelectionConflictException exception) {
+        return errorResponse(HttpStatus.CONFLICT, "conflict", "product-selection",
+                "PRODUCT_SELECTION_CONFLICT", exception.getMessage());
+    }
+
     @ExceptionHandler(CopySeoGenerationNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleCopySeoGenerationNotFound(
             CopySeoGenerationNotFoundException exception) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
-                "status", "not_found",
-                "service", "copy-seo",
-                "errorCode", "COPY_SEO_GENERATION_NOT_FOUND",
-                "message", exception.getMessage(),
-                "timestamp", Instant.now().toString()));
+        return errorResponse(HttpStatus.NOT_FOUND, "not_found", "copy-seo",
+                "COPY_SEO_GENERATION_NOT_FOUND", exception.getMessage());
     }
 
     @ExceptionHandler(CopySeoReviewConflictException.class)
     public ResponseEntity<Map<String, Object>> handleCopySeoReviewConflict(
             CopySeoReviewConflictException exception) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
-                "status", "conflict",
-                "service", "copy-seo",
-                "errorCode", "COPY_SEO_REVIEW_CONFLICT",
-                "message", exception.getMessage(),
-                "timestamp", Instant.now().toString()));
+        return errorResponse(HttpStatus.CONFLICT, "conflict", "copy-seo",
+                "COPY_SEO_REVIEW_CONFLICT", exception.getMessage());
     }
 
     @ExceptionHandler(ShopifyNotConfiguredException.class)
     public ResponseEntity<Map<String, Object>> handleShopifyNotConfigured(
             ShopifyNotConfiguredException exception) {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of(
-                "status", "not_configured",
-                "service", "shopify",
-                "errorCode", "SHOPIFY_NOT_CONFIGURED",
-                "message", exception.getMessage(),
-                "timestamp", Instant.now().toString()));
+        return errorResponse(HttpStatus.SERVICE_UNAVAILABLE, "not_configured", "shopify",
+                "SHOPIFY_NOT_CONFIGURED", exception.getMessage());
     }
 
     @ExceptionHandler(ShopifyIntegrationException.class)
@@ -57,12 +75,15 @@ public class ApiExceptionHandler {
             case REMOTE_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             default -> HttpStatus.BAD_GATEWAY;
         };
-        return ResponseEntity.status(status).body(Map.of(
-                "status", "error",
-                "service", "shopify",
-                "errorCode", exception.getCode().name(),
-                "message", exception.getMessage(),
-                "timestamp", Instant.now().toString()));
+        return errorResponse(status, "error", "shopify",
+                exception.getCode().name(), exception.getMessage());
+    }
+
+    private ResponseEntity<Map<String, Object>> errorResponse(
+            HttpStatus httpStatus, String status, String service, String errorCode, String message) {
+        return ResponseEntity.status(httpStatus).body(Map.of(
+                "status", status, "service", service, "errorCode", errorCode,
+                "message", message, "timestamp", Instant.now().toString()));
     }
 
     @ExceptionHandler(RestClientException.class)

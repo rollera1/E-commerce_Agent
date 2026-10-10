@@ -1,0 +1,7 @@
+package com.ecommerce.agent.shopifylisting;
+
+public enum ListingStatus {
+    CONFIGURED, CREATING_DRAFT, DRAFT_CREATED, WRITING_VARIANTS,
+    MEDIA_PENDING, READY_TO_PUBLISH, ACTIVATING, PUBLISHING,
+    PUBLISHED, FAILED, EDITING
+}

@@ -22,4 +22,12 @@ public record SourceProduct(
         // 用于追溯来源的商品地址。
         String sourceUrl,
         // 本次数据抓取时间。
-        Instant fetchedAt) {}
+        Instant fetchedAt,
+        Integer inventoryTotal) {
+    public SourceProduct(String source, String sourceProductId, String title,
+            String description, List<String> images, Money price, List<SourceVariant> variants,
+            String sourceUrl, Instant fetchedAt) {
+        this(source, sourceProductId, title, description, images, price, variants,
+                sourceUrl, fetchedAt, null);
+    }
+}

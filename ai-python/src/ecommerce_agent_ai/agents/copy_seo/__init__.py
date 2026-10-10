@@ -1,1 +1,1 @@
-"""Copy and SEO agent."""
+"""文案与 SEO Agent。"""

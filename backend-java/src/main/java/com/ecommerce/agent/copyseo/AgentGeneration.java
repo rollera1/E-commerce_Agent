@@ -13,5 +13,7 @@ public record AgentGeneration(
         // Agent 生成的文案；执行失败时为空。
         CopySeoContent content,
         // 模型、提示词版本和耗时等执行信息。
-        AgentExecution execution) {
+        AgentExecution execution,
+        // 工具、步骤、校验和回退等脱敏轨迹。
+        AgentTrace trace) {
 }

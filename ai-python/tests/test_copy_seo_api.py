@@ -1,5 +1,8 @@
+import pytest
 from fastapi.testclient import TestClient
 
+from ecommerce_agent_ai.agents.copy_seo.errors import CopySeoAgentError
+from ecommerce_agent_ai.agents.copy_seo.models import AgentOutcome, AgentTrace
 from ecommerce_agent_ai.main import app
 
 client = TestClient(app)
@@ -40,9 +43,16 @@ def test_generates_structured_copy_pending_merchant_review() -> None:
         "tags": ["desk lamp", "LED lighting", "home office"],
     }
     assert payload["execution"]["agent"] == "COPY_SEO"
-    assert payload["execution"]["agentVersion"] == "fake-v1"
-    assert payload["execution"]["promptVersion"] == "copy-seo-v1"
+    assert payload["execution"]["agentVersion"] == "copy-seo-fake-v2"
+    assert payload["execution"]["promptVersion"] == "copy-seo-react-v1"
     assert payload["execution"]["model"] == "fake-deterministic"
+    assert payload["trace"]["outcome"] == "COMPLETED"
+    assert payload["trace"]["nextAction"] == "MERCHANT_REVIEW"
+    assert payload["trace"]["modelAttempts"] == 1
+    assert [call["tool"] for call in payload["trace"]["toolCalls"]] == [
+        "get_product_facts",
+        "validate_copy_seo",
+    ]
     assert "apiKey" not in response.text
 
 
@@ -82,3 +92,43 @@ def test_rejects_an_invalid_generation_request_before_agent_execution() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_returns_bounded_agent_trace_when_content_requires_human_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class NoncompliantAgent:
+        def generate(self, *args, **kwargs):
+            del args, kwargs
+            trace = AgentTrace(
+                current_step="AGENT_REVIEW",
+                outcome=AgentOutcome.NEEDS_HUMAN_INPUT,
+                model_attempts=3,
+                revision_count=1,
+                validation_issues=["UNSUPPORTED_CLAIM:lifetime warranty"],
+                next_action="HUMAN_CONTENT_REVIEW",
+            )
+            raise CopySeoAgentError("CONTENT_REQUIRES_HUMAN_REVIEW", False, trace=trace)
+
+    monkeypatch.setattr(
+        "ecommerce_agent_ai.agents.copy_seo.router.copy_seo_agent",
+        NoncompliantAgent(),
+    )
+
+    response = client.post(
+        "/internal/agents/copy-seo/generations",
+        json={
+            "sourceProductId": "fake-desk-lamp-001",
+            "targetMarket": "US",
+            "language": "en",
+        },
+    )
+
+    assert response.status_code == 502
+    detail = response.json()["detail"]
+    assert detail["errorCode"] == "CONTENT_REQUIRES_HUMAN_REVIEW"
+    assert detail["retryable"] is False
+    assert detail["nextAction"] == "HUMAN_CONTENT_REVIEW"
+    assert detail["trace"]["modelAttempts"] == 3
+    assert detail["trace"]["revisionCount"] == 1
+    assert "apiKey" not in response.text

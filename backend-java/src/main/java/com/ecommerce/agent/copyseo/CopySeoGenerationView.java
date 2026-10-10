@@ -18,6 +18,8 @@ public record CopySeoGenerationView(
         CopySeoContent content,
         // Agent 执行信息。
         AgentExecution execution,
+        // Agent 工具和编排轨迹；旧记录可能为空。
+        AgentTrace trace,
         // 失败详情；成功记录中为空。
         AgentFailure failure) {
 }

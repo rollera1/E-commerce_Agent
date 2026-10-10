@@ -1,37 +1,41 @@
 import os
-from urllib.parse import urlparse
 
-from ecommerce_agent_ai.agents.copy_seo.deepseek import DeepSeekCopySeoAgent
+from ecommerce_agent_ai.agents.copy_seo.agent import CopySeoReactAgent
 from ecommerce_agent_ai.agents.copy_seo.fake import FakeCopySeoAgent
-from ecommerce_agent_ai.agents.copy_seo.openai_compatible import (
-    OpenAiCompatibleCopySeoAgent,
-)
 from ecommerce_agent_ai.agents.copy_seo.port import CopySeoAgent
+from ecommerce_agent_ai.agents.llm import (
+    DEFAULT_APINEBULA_BASE_URL as DEFAULT_APINEBULA_BASE_URL,
+)
+from ecommerce_agent_ai.agents.llm import (
+    DEFAULT_APINEBULA_MODEL as DEFAULT_APINEBULA_MODEL,
+)
+from ecommerce_agent_ai.agents.llm import (
+    build_agent_model as build_copy_seo_model,
+)
+from ecommerce_agent_ai.product_sources.factory import build_product_source
+from ecommerce_agent_ai.product_sources.port import ProductSource
 
 
-def build_copy_seo_agent() -> CopySeoAgent:
+def build_copy_seo_agent(product_source: ProductSource | None = None) -> CopySeoAgent:
+    source = product_source or build_product_source()
     if os.getenv("LLM_ENABLED", "false").lower() != "true":
-        return FakeCopySeoAgent()
-    provider = os.getenv("LLM_PROVIDER", "deepseek").strip().lower()
-    if provider not in {"deepseek", "apinebula"}:
-        raise RuntimeError(f"Unsupported LLM_PROVIDER: {provider}")
+        return FakeCopySeoAgent(source)
+    max_revisions = _bounded_integer("COPY_SEO_MAX_REVISIONS", 1, 0, 3)
+    max_tool_calls = _bounded_integer("COPY_SEO_MAX_TOOL_CALLS", 4, 1, 10)
+    return CopySeoReactAgent(
+        build_copy_seo_model(),
+        source,
+        max_revisions=max_revisions,
+        max_tool_calls=max_tool_calls,
+    )
 
-    if provider == "apinebula":
-        api_key = os.getenv("LLM_API_KEY", "")
-        base_url = os.getenv("LLM_BASE_URL", "https://api.yhlxj.ai/v1")
-        model = os.getenv("LLM_MODEL", "gpt-5.6-terra")
-    else:
-        api_key = os.getenv("LLM_API_KEY") or os.getenv("DEEPSEEK_API_KEY", "")
-        base_url = os.getenv("LLM_BASE_URL") or os.getenv(
-            "DEEPSEEK_BASE_URL", "https://api.deepseek.com"
-        )
-        model = os.getenv("LLM_MODEL") or os.getenv(
-            "DEEPSEEK_MODEL", "deepseek-v4-flash"
-        )
-    if not api_key.strip():
-        raise RuntimeError("LLM_ENABLED=true requires LLM_API_KEY")
-    if urlparse(base_url).scheme != "https":
-        raise RuntimeError("LLM_BASE_URL must use HTTPS")
-    if provider == "apinebula":
-        return OpenAiCompatibleCopySeoAgent(api_key, base_url, model)
-    return DeepSeekCopySeoAgent(api_key, base_url, model)
+
+def _bounded_integer(name: str, default: int, minimum: int, maximum: int) -> int:
+    raw_value = os.getenv(name, str(default))
+    try:
+        value = int(raw_value)
+    except ValueError as error:
+        raise RuntimeError(f"{name} must be an integer") from error
+    if value < minimum or value > maximum:
+        raise RuntimeError(f"{name} must be between {minimum} and {maximum}")
+    return value

@@ -11,5 +11,7 @@ public enum ShopifyErrorCode {
     // Shopify 响应缺少业务所需字段。
     INVALID_RESPONSE,
     // 网络错误或 Shopify 服务不可用。
-    REMOTE_UNAVAILABLE
+    REMOTE_UNAVAILABLE,
+    RATE_LIMITED,
+    USER_ERROR
 }

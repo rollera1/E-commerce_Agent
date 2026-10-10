@@ -3,12 +3,15 @@ package com.ecommerce.agent.web;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ecommerce.agent.copyseo.AgentExecution;
+import com.ecommerce.agent.copyseo.AgentOutcome;
+import com.ecommerce.agent.copyseo.AgentTrace;
 import com.ecommerce.agent.copyseo.CopySeoContent;
 import com.ecommerce.agent.copyseo.CopySeoGenerationRequest;
 import com.ecommerce.agent.copyseo.CopySeoGenerationService;
@@ -17,7 +20,13 @@ import com.ecommerce.agent.copyseo.CopySeoGenerationNotFoundException;
 import com.ecommerce.agent.copyseo.CopySeoReviewConflictException;
 import com.ecommerce.agent.copyseo.GenerationStatus;
 import com.ecommerce.agent.copyseo.ReviewStatus;
+import com.ecommerce.agent.copyseo.ToolCallStatus;
+import com.ecommerce.agent.copyseo.ToolCallTrace;
+import com.ecommerce.agent.productselection.ProductSelectionConflictException;
+import com.ecommerce.agent.productselection.ProductSelectionService;
+import com.ecommerce.agent.shopifylisting.ShopifyListingService;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -34,12 +43,20 @@ class CopySeoGenerationControllerTest {
     @MockitoBean
     private CopySeoGenerationService generationService;
 
+    @MockitoBean
+    private ProductSelectionService selectionService;
+
+    @MockitoBean
+    private ShopifyListingService listingService;
+
     @Test
     void generatesCopyThatRequiresMerchantReview() throws Exception {
+        when(selectionService.requireConfirmedSourceProduct("selection-1"))
+                .thenReturn("fake-desk-lamp-001");
         when(generationService.generate(any(CopySeoGenerationRequest.class)))
                 .thenReturn(generation());
 
-        mockMvc.perform(post("/api/source-products/fake-desk-lamp-001/copy-seo-generations")
+        mockMvc.perform(post("/api/product-selections/selection-1/copy-seo-generations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"targetMarket":"US","language":"en"}
@@ -49,7 +66,11 @@ class CopySeoGenerationControllerTest {
                 .andExpect(jsonPath("$.reviewStatus").value("PENDING_REVIEW"))
                 .andExpect(jsonPath("$.content.title").value(
                         "Adjustable LED Desk Lamp for Focused Workspaces"))
+                .andExpect(jsonPath("$.trace.outcome").value("COMPLETED"))
+                .andExpect(jsonPath("$.trace.toolCalls[0].tool")
+                        .value("get_product_detail"))
                 .andExpect(jsonPath("$.execution.apiKey").doesNotExist());
+        verifyNoInteractions(listingService);
     }
 
     @Test
@@ -85,6 +106,7 @@ class CopySeoGenerationControllerTest {
                         "/api/copy-seo-generations/9d1625ec-9c39-45c8-afc0-24e2e45b2158/accept"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reviewStatus").value("ACCEPTED"));
+        verifyNoInteractions(listingService);
     }
 
     @Test
@@ -121,10 +143,24 @@ class CopySeoGenerationControllerTest {
 
     @Test
     void rejectsGenerationRequestWhenMarketOrLanguageIsMissing() throws Exception {
-        mockMvc.perform(post("/api/source-products/fake-desk-lamp-001/copy-seo-generations")
+        mockMvc.perform(post("/api/product-selections/selection-1/copy-seo-generations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsCopyGenerationBeforeMerchantSelectionConfirmation() throws Exception {
+        when(selectionService.requireConfirmedSourceProduct("selection-1"))
+                .thenThrow(new ProductSelectionConflictException("必须先由商家确认候选商品"));
+
+        mockMvc.perform(post("/api/product-selections/selection-1/copy-seo-generations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"targetMarket":"US","language":"en"}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("PRODUCT_SELECTION_CONFLICT"));
     }
 
     @Test
@@ -162,6 +198,20 @@ class CopySeoGenerationControllerTest {
                         "A compact adjustable LED desk lamp for home offices.",
                         List.of("desk lamp")),
                 new AgentExecution("COPY_SEO", "fake-v1", "copy-seo-v1", "fake", 0),
+                new AgentTrace(
+                        "AWAIT_MERCHANT_REVIEW",
+                        AgentOutcome.COMPLETED,
+                        List.of("COLLECT_PRODUCT_CONTEXT", "AWAIT_MERCHANT_REVIEW"),
+                        List.of(new ToolCallTrace(
+                                "get_product_detail",
+                                ToolCallStatus.SUCCEEDED,
+                                0,
+                                Map.of("variantCount", 1),
+                                null)),
+                        1,
+                        0,
+                        List.of(),
+                        "MERCHANT_REVIEW"),
                 null);
     }
 }
