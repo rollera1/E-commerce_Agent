@@ -22,6 +22,28 @@ services:
       retries: 20
       start_period: 20s
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecommerce-agent-postgres
+    restart: unless-stopped
+    ports:
+      # PostgreSQL 仅保存 Python Agent 运行时数据，开发机通过 SSH 隧道访问。
+      - "127.0.0.1:5434:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agent_runtime}
+      POSTGRES_USER: ${POSTGRES_USER:-agent_runtime}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_agent_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
 volumes:
   mysql_data:
     name: ecommerce-agent-mysql-data
+  postgres_data:
+    name: ecommerce-agent-postgres-data

@@ -82,9 +82,17 @@ function Start-ProjectService {
 
 Write-Host "Starting E-commerce Agent local services..." -ForegroundColor Cyan
 
-# Ensure the database tunnel is available before starting Java.
-Start-ProjectService -Name "database" -Port 3307 -ScriptName "start-database.cmd"
+# Ensure both database tunnels are available before starting application services.
+$mysqlReady = Test-LocalPort -Port 3307
+$postgresReady = Test-LocalPort -Port 5433
+if ($mysqlReady -xor $postgresReady) {
+    throw "Only one database tunnel is active. Stop the old tunnel and rerun this script."
+}
+if (-not $mysqlReady) {
+    Start-ProjectService -Name "database" -Port 3307 -ScriptName "start-database.cmd"
+}
 Wait-LocalPort -Name "database" -Port 3307 -TimeoutSeconds $StartupTimeoutSeconds
+Wait-LocalPort -Name "agent-database" -Port 5433 -TimeoutSeconds $StartupTimeoutSeconds
 
 # Start Python and frontend independently.
 Start-ProjectService -Name "python" -Port 8005 -ScriptName "start-python.cmd"
@@ -97,7 +105,7 @@ Start-ProjectService -Name "backend" -Port 8085 -ScriptName "start-backend.cmd"
 Wait-LocalPort -Name "backend" -Port 8085 -TimeoutSeconds $StartupTimeoutSeconds
 
 Write-Host ""
-Write-Host "All four services are running." -ForegroundColor Green
+Write-Host "All services are running." -ForegroundColor Green
 Write-Host "Frontend: http://localhost:5175"
 Write-Host "Java:    http://localhost:8085/api/health"
 Write-Host "Python:  http://localhost:8005/health"
