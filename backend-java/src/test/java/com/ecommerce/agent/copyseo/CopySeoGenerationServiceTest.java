@@ -1,11 +1,13 @@
 package com.ecommerce.agent.copyseo;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -15,6 +17,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -82,11 +85,9 @@ class CopySeoGenerationServiceTest {
     }
 
     @Test
-    void asyncModePersistsJavaTaskAndSubmitsOnePythonRun() {
+    void asyncModeCommitsJavaTaskBeforeAnyPythonCall() {
         when(repository.save(any(CopySeoGeneration.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(agentRunGateway.submit(anyString(), eq(1), eq("fake-desk-lamp-001"), eq("US"), eq("en")))
-                .thenReturn(new AgentRunResult("run-1", AgentRunStatus.SUBMITTED, null, null));
         var service = asyncService();
 
         var result = service.generate(new CopySeoGenerationRequest(
@@ -95,22 +96,31 @@ class CopySeoGenerationServiceTest {
         assertThat(result.status()).isEqualTo(GenerationStatus.SUBMITTED);
         assertThat(result.reviewStatus()).isEqualTo(ReviewStatus.NOT_APPLICABLE);
         assertThat(result.content()).isNull();
-        verify(agentRunGateway).submit(
-                eq(result.generationId()), eq(1), eq("fake-desk-lamp-001"), eq("US"), eq("en"));
+        verifyNoInteractions(agentRunGateway);
     }
 
     @Test
-    void asyncModeKeepsMysqlTaskWhenInitialSubmissionIsUnavailable() {
+    void pollLeavesCommittedMysqlTaskRetryableWhenPythonSubmissionIsUnavailable() {
+        var persisted = new AtomicReference<CopySeoGeneration>();
         when(repository.save(any(CopySeoGeneration.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    CopySeoGeneration value = invocation.getArgument(0);
+                    persisted.set(value);
+                    return value;
+                });
+        var service = asyncService();
+        var created = service.generate(new CopySeoGenerationRequest(
+                "fake-desk-lamp-001", "US", "en"));
+        CopySeoGeneration pending = persisted.get();
+        when(repository.findById(created.generationId())).thenReturn(Optional.of(pending));
         when(agentRunGateway.submit(anyString(), eq(1), eq("fake-desk-lamp-001"), eq("US"), eq("en")))
                 .thenThrow(new IllegalStateException("upstream response must not be persisted"));
 
-        var result = asyncService().generate(new CopySeoGenerationRequest(
-                "fake-desk-lamp-001", "US", "en"));
+        assertThatThrownBy(() -> service.poll(created.generationId()))
+                .isInstanceOf(IllegalStateException.class);
 
-        assertThat(result.status()).isEqualTo(GenerationStatus.SUBMITTED);
-        assertThat(result.failure()).isNull();
+        assertThat(pending.toView().status()).isEqualTo(GenerationStatus.SUBMITTED);
+        assertThat(pending.agentRunAttempt()).isZero();
     }
 
     @Test

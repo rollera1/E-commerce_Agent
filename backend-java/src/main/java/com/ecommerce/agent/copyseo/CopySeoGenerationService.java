@@ -85,14 +85,8 @@ public class CopySeoGenerationService {
     }
 
     private CopySeoGenerationView submit(CopySeoGenerationRequest request) {
-        CopySeoGeneration generation = repository.save(
-                CopySeoGeneration.submitted(request, clock.instant()));
-        try {
-            submitNextRun(generation);
-        } catch (RuntimeException ignored) {
-            // 提交失败时保留 MySQL 任务，轮询器会用同一个幂等键重提。
-        }
-        return repository.save(generation).toView();
+        // 先提交 MySQL；外部调用统一由轮询器在事务完成后执行，避免产生无主 Python 任务。
+        return repository.save(CopySeoGeneration.submitted(request, clock.instant())).toView();
     }
 
     @Transactional(readOnly = true)
