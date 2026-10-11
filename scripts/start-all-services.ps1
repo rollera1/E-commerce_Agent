@@ -80,6 +80,37 @@ function Start-ProjectService {
     Write-Host "[START] $Name (PID $($process.Id)); logs: $stdoutLog" -ForegroundColor Cyan
 }
 
+function Start-ProjectWorker {
+    param(
+        [string]$Name,
+        [string]$ScriptName
+    )
+
+    $pidPath = Join-Path $runtimeDir "$Name.pid"
+    if (Test-Path -LiteralPath $pidPath) {
+        $savedPid = Get-Content -LiteralPath $pidPath -ErrorAction SilentlyContinue
+        if ($savedPid -and (Get-Process -Id $savedPid -ErrorAction SilentlyContinue)) {
+            Write-Host "[SKIP] $Name is already running with PID $savedPid." -ForegroundColor Yellow
+            return
+        }
+    }
+
+    $scriptPath = Join-Path $PSScriptRoot $ScriptName
+    $stdoutLog = Join-Path $logDir "$Name.log"
+    $stderrLog = Join-Path $logDir "$Name.error.log"
+    $process = Start-Process `
+        -FilePath $env:ComSpec `
+        -ArgumentList @("/d", "/c", "call `"$scriptPath`"") `
+        -WorkingDirectory $projectDir `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput $stdoutLog `
+        -RedirectStandardError $stderrLog `
+        -PassThru
+
+    Set-Content -LiteralPath $pidPath -Value $process.Id
+    Write-Host "[START] $Name (PID $($process.Id)); logs: $stdoutLog" -ForegroundColor Cyan
+}
+
 Write-Host "Starting E-commerce Agent local services..." -ForegroundColor Cyan
 
 # Ensure both database tunnels are available before starting application services.
@@ -99,6 +130,18 @@ Start-ProjectService -Name "python" -Port 8005 -ScriptName "start-python.cmd"
 Start-ProjectService -Name "frontend" -Port 5175 -ScriptName "start-frontend.cmd"
 Wait-LocalPort -Name "python" -Port 8005 -TimeoutSeconds $StartupTimeoutSeconds
 Wait-LocalPort -Name "frontend" -Port 5175 -TimeoutSeconds $StartupTimeoutSeconds
+
+$agentExecutionMode = $env:AGENT_EXECUTION_MODE
+$envPath = Join-Path $projectDir ".env"
+if (Test-Path -LiteralPath $envPath) {
+    $modeLine = Get-Content -LiteralPath $envPath |
+        Where-Object { $_ -match '^AGENT_EXECUTION_MODE=' } |
+        Select-Object -Last 1
+    if ($modeLine) { $agentExecutionMode = $modeLine.Split('=', 2)[1].Trim() }
+}
+if ($agentExecutionMode -eq "async") {
+    Start-ProjectWorker -Name "agent-worker" -ScriptName "start-agent-worker.cmd"
+}
 
 # Java requires the database and Python services.
 Start-ProjectService -Name "backend" -Port 8085 -ScriptName "start-backend.cmd"

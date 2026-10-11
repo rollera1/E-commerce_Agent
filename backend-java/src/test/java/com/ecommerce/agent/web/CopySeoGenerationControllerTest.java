@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -71,6 +72,47 @@ class CopySeoGenerationControllerTest {
                         .value("get_product_detail"))
                 .andExpect(jsonPath("$.execution.apiKey").doesNotExist());
         verifyNoInteractions(listingService);
+    }
+
+    @Test
+    void returnsAcceptedForAnAsynchronousGeneration() throws Exception {
+        when(selectionService.requireConfirmedSourceProduct("selection-1"))
+                .thenReturn("fake-desk-lamp-001");
+        when(generationService.generate(any(CopySeoGenerationRequest.class)))
+                .thenReturn(submittedGeneration());
+
+        mockMvc.perform(post("/api/product-selections/selection-1/copy-seo-generations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"targetMarket":"US","language":"en"}
+                                """))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.content").doesNotExist());
+    }
+
+    @Test
+    void getsPersistedGenerationStatus() throws Exception {
+        when(generationService.get("generation-1")).thenReturn(submittedGeneration());
+
+        mockMvc.perform(get("/api/copy-seo-generations/generation-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.generationId").value("generation-1"))
+                .andExpect(jsonPath("$.status").value("SUBMITTED"));
+    }
+
+    @Test
+    void cancelsAnAsynchronousGeneration() throws Exception {
+        var cancelled = new CopySeoGenerationView(
+                "generation-1", "fake-desk-lamp-001", "US", "en",
+                GenerationStatus.CANCELLED, ReviewStatus.NOT_APPLICABLE,
+                null, new AgentExecution("COPY_SEO", "pending", "pending", "pending", 0),
+                null, null);
+        when(generationService.cancel("generation-1")).thenReturn(cancelled);
+
+        mockMvc.perform(post("/api/copy-seo-generations/generation-1/cancel"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
     }
 
     @Test
@@ -212,6 +254,20 @@ class CopySeoGenerationControllerTest {
                         0,
                         List.of(),
                         "MERCHANT_REVIEW"),
+                null);
+    }
+
+    private CopySeoGenerationView submittedGeneration() {
+        return new CopySeoGenerationView(
+                "generation-1",
+                "fake-desk-lamp-001",
+                "US",
+                "en",
+                GenerationStatus.SUBMITTED,
+                ReviewStatus.NOT_APPLICABLE,
+                null,
+                new AgentExecution("COPY_SEO", "pending", "pending", "pending", 0),
+                null,
                 null);
     }
 }

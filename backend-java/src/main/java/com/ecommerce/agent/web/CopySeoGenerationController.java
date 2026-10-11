@@ -13,6 +13,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -38,20 +40,37 @@ public class CopySeoGenerationController {
 
     @PostMapping("/api/product-selections/{selectionId}/copy-seo-generations")
     /** 只为商家已经确认的来源商品创建文案生成记录。 */
-    public CopySeoGenerationView generate(
+    public ResponseEntity<CopySeoGenerationView> generate(
             @PathVariable String selectionId,
             @Valid @RequestBody GenerationBody body) {
         String sourceProductId = selectionService.requireConfirmedSourceProduct(selectionId);
         CopySeoGenerationView generated = generationService.generate(new CopySeoGenerationRequest(
                 sourceProductId, body.targetMarket(), body.language()));
-        if (generated.status() == GenerationStatus.SUCCEEDED && body.listingSettings() != null) {
+        if ((generated.status() == GenerationStatus.SUCCEEDED
+                || generated.status() == GenerationStatus.SUBMITTED)
+                && body.listingSettings() != null) {
             listingService.configure(generated.generationId(), sourceProductId, body.listingSettings());
-            if (body.listingSettings().reviewMode() == ReviewMode.AUTO) {
+            if (generated.status() == GenerationStatus.SUCCEEDED
+                    && body.listingSettings().reviewMode() == ReviewMode.AUTO) {
                 generated = generationService.accept(generated.generationId());
                 listingService.processAccepted(generated.generationId());
             }
         }
-        return generated;
+        return generated.status() == GenerationStatus.SUBMITTED
+                ? ResponseEntity.accepted().body(generated)
+                : ResponseEntity.ok(generated);
+    }
+
+    @GetMapping("/api/copy-seo-generations/{generationId}")
+    /** 查询由 Java 持有的文案生成业务状态。 */
+    public CopySeoGenerationView get(@PathVariable String generationId) {
+        return generationService.get(generationId);
+    }
+
+    @PostMapping("/api/copy-seo-generations/{generationId}/cancel")
+    /** 取消尚未结束的异步 Agent 任务。 */
+    public CopySeoGenerationView cancel(@PathVariable String generationId) {
+        return generationService.cancel(generationId);
     }
 
     @PutMapping("/api/copy-seo-generations/{generationId}/content")

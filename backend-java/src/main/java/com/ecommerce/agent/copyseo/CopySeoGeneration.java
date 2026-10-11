@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -100,6 +101,20 @@ public class CopySeoGeneration {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    // Python Agent Runtime 返回的运行 ID。
+    @Column(name = "agent_run_id", length = 36)
+    private String agentRunId;
+    // Java 已提交的整次 Agent Run 次数，最多两次。
+    @Column(name = "agent_run_attempt", nullable = false)
+    private int agentRunAttempt;
+    // Java 下一次允许查询或重提任务的时间。
+    @Column(name = "next_poll_at")
+    private Instant nextPollAt;
+    // 防止多实例同时推进同一业务任务时互相覆盖。
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
+
     protected CopySeoGeneration() {
         // JPA 加载实体时使用。
     }
@@ -125,6 +140,24 @@ public class CopySeoGeneration {
     public static CopySeoGeneration pendingReview(
             AgentGeneration generated, String targetMarket, String language, Instant now) {
         return new CopySeoGeneration(generated, targetMarket, language, now);
+    }
+
+    public static CopySeoGeneration submitted(CopySeoGenerationRequest request, Instant now) {
+        CopySeoGeneration generation = new CopySeoGeneration();
+        generation.generationId = UUID.randomUUID().toString();
+        generation.sourceProductId = request.sourceProductId();
+        generation.targetMarket = request.targetMarket();
+        generation.language = request.language();
+        generation.status = GenerationStatus.SUBMITTED;
+        generation.reviewStatus = ReviewStatus.NOT_APPLICABLE;
+        generation.agent = "COPY_SEO";
+        generation.agentVersion = "pending";
+        generation.promptVersion = "pending";
+        generation.model = "pending";
+        generation.createdAt = now;
+        generation.updatedAt = now;
+        generation.nextPollAt = now;
+        return generation;
     }
 
     public static CopySeoGeneration failed(
@@ -153,6 +186,69 @@ public class CopySeoGeneration {
         generation.createdAt = now;
         generation.updatedAt = now;
         return generation;
+    }
+
+    public void bindRun(AgentRunResult run, int attempt, Instant nextPollAt, Instant now) {
+        this.agentRunId = run.runId();
+        this.agentRunAttempt = attempt;
+        updateRunStatus(run.status(), nextPollAt, now);
+    }
+
+    public void observe(AgentRunStatus runStatus, Instant nextPollAt, Instant now) {
+        updateRunStatus(runStatus, nextPollAt, now);
+    }
+
+    public void complete(AgentGeneration generated, Instant now) {
+        this.status = GenerationStatus.SUCCEEDED;
+        this.reviewStatus = ReviewStatus.PENDING_REVIEW;
+        applyContent(generated.content());
+        this.agent = generated.execution().agent();
+        this.agentVersion = generated.execution().agentVersion();
+        this.promptVersion = generated.execution().promptVersion();
+        this.model = generated.execution().model();
+        this.durationMs = generated.execution().durationMs();
+        this.trace = generated.trace();
+        this.errorType = null;
+        this.retryable = null;
+        this.nextPollAt = null;
+        this.updatedAt = now;
+    }
+
+    public void prepareRetry(Instant now) {
+        this.agentRunId = null;
+        this.status = GenerationStatus.SUBMITTED;
+        this.nextPollAt = now;
+        this.updatedAt = now;
+    }
+
+    public void fail(AgentRunFailure failure, Instant now) {
+        this.status = GenerationStatus.FAILED;
+        this.reviewStatus = ReviewStatus.NOT_APPLICABLE;
+        this.errorType = failure == null ? "AGENT_RUN_FAILED" : failure.errorType();
+        this.retryable = failure != null && failure.retryable();
+        this.nextPollAt = null;
+        this.updatedAt = now;
+    }
+
+    public void cancel(Instant now) {
+        this.status = GenerationStatus.CANCELLED;
+        this.reviewStatus = ReviewStatus.NOT_APPLICABLE;
+        this.nextPollAt = null;
+        this.updatedAt = now;
+    }
+
+    public boolean awaitingAgent() {
+        return status == GenerationStatus.SUBMITTED || status == GenerationStatus.RUNNING;
+    }
+
+    private void updateRunStatus(AgentRunStatus runStatus, Instant pollAt, Instant now) {
+        if (runStatus == AgentRunStatus.RUNNING) {
+            this.status = GenerationStatus.RUNNING;
+        } else if (runStatus == AgentRunStatus.SUBMITTED) {
+            this.status = GenerationStatus.SUBMITTED;
+        }
+        this.nextPollAt = pollAt;
+        this.updatedAt = now;
     }
 
     private void applyContent(CopySeoContent content) {
@@ -215,4 +311,11 @@ public class CopySeoGeneration {
                 trace,
                 failure);
     }
+
+    public String generationId() { return generationId; }
+    public String sourceProductId() { return sourceProductId; }
+    public String targetMarket() { return targetMarket; }
+    public String language() { return language; }
+    public String agentRunId() { return agentRunId; }
+    public int agentRunAttempt() { return agentRunAttempt; }
 }

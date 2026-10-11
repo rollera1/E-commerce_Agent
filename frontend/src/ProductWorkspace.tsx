@@ -61,7 +61,7 @@ type CopySeoGeneration = {
   sourceProductId: string
   targetMarket: string
   language: string
-  status: 'SUCCEEDED' | 'FAILED'
+  status: 'SUBMITTED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
   reviewStatus: 'PENDING_REVIEW' | 'ACCEPTED' | 'REJECTED' | 'NOT_APPLICABLE'
   content: CopySeoContent | null
   execution: {
@@ -209,16 +209,19 @@ export default function ProductWorkspace() {
     if (!selected || !selectionId || !selectionConfirmed) return
     if (generation?.reviewStatus === 'ACCEPTED' || listing) return
     await runAction(async () => {
-      let payload = await requestJson<CopySeoGeneration>(
-        `/api/product-selections/${encodeURIComponent(selectionId)}/copy-seo-generations`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetMarket: 'US', language }),
-        },
-      )
+      let payload = generation && agentRunPending(generation.status)
+        ? generation
+        : await requestJson<CopySeoGeneration>(
+          `/api/product-selections/${encodeURIComponent(selectionId)}/copy-seo-generations`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetMarket: 'US', language }),
+          },
+        )
       setGeneration(payload)
       setListing(null)
+      if (agentRunPending(payload.status)) payload = await pollGeneration(payload)
       if (payload.content) setDraft(payload.content)
       if (payload.status === 'SUCCEEDED' && payload.content && reviewMode === 'AUTO') {
         payload = await requestJson<CopySeoGeneration>(
@@ -228,9 +231,11 @@ export default function ProductWorkspace() {
       }
       setGeneration(payload)
       setListing(null)
-      if (payload.status === 'FAILED' || !payload.content) {
+      if (payload.status === 'FAILED' || payload.status === 'CANCELLED' || !payload.content) {
         setDraft(emptyContent)
-        setMessage(`Agent 已停止：${payload.failure?.errorType ?? '未知错误'}，需要人工处理。`)
+        setMessage(payload.status === 'CANCELLED'
+          ? 'Agent 任务已取消。'
+          : `Agent 已停止：${payload.failure?.errorType ?? '未知错误'}，需要人工处理。`)
       } else {
         setDraft(payload.content)
         setMessage(payload.reviewStatus === 'ACCEPTED'
@@ -238,6 +243,24 @@ export default function ProductWorkspace() {
           : '生成完成，请审核内容；接受文案不会创建或发布 Shopify 商品。')
       }
     }, 'Agent 生成失败', '文案与 SEO Agent 正在生成内容……')
+  }
+
+  async function pollGeneration(initial: CopySeoGeneration) {
+    let current = initial
+    for (let pollCount = 0; pollCount < 120 && agentRunPending(current.status); pollCount += 1) {
+      setMessage(current.status === 'RUNNING'
+        ? '文案与 SEO Agent 正在后台执行，可安全重启 API 服务。'
+        : '文案任务已提交，正在等待 Agent Worker 领取。')
+      current = await requestJson<CopySeoGeneration>(
+        `/api/copy-seo-generations/${encodeURIComponent(current.generationId)}`,
+      )
+      setGeneration(current)
+      if (agentRunPending(current.status)) await delay(1500)
+    }
+    if (agentRunPending(current.status)) {
+      throw new Error('Agent 仍在后台执行，请稍后点击“继续查询生成状态”。')
+    }
+    return current
   }
 
   async function confirmSelection() {
@@ -455,7 +478,8 @@ export default function ProductWorkspace() {
   }
 
   const pending = generation?.reviewStatus === 'PENDING_REVIEW'
-  const languageLocked = loading || generation?.reviewStatus === 'ACCEPTED' || Boolean(listing)
+  const generationRunning = Boolean(generation && agentRunPending(generation.status))
+  const languageLocked = loading || generationRunning || generation?.reviewStatus === 'ACCEPTED' || Boolean(listing)
   const languageChanged = Boolean(generation?.content && generation.language !== language)
   function languageControl(id: string) {
     return <div className="copy-language"><label htmlFor={id}>文案语言<select id={id} value={language} disabled={languageLocked} onChange={(event) => setLanguage(event.target.value as 'en' | 'zh')}><option value="en">英文（店铺区域语言）</option><option value="zh">简体中文</option></select></label><small>适用于标题、卖点、描述、SEO 与标签。{languageChanged ? '当前内容仍为原语言，请重新生成。' : '切换语言后点击生成，不会自动翻译已有内容。'}</small></div>
@@ -554,7 +578,7 @@ export default function ProductWorkspace() {
               {languageControl('product-copy-language')}
               <div className="review-actions primary-actions">
                 <button type="button" onClick={confirmSelection} disabled={loading || selectionConfirmed}>{selectionConfirmed ? '商品已确认' : '确认选择此商品'}</button>
-                <button type="button" className="secondary-button" onClick={generate} disabled={languageLocked || !selectionConfirmed}><Icon name="sparkles" size={17} />{loading ? '处理中' : generation?.content ? '重新生成文案与 SEO' : '生成文案与 SEO'}</button>
+                <button type="button" className="secondary-button" onClick={generate} disabled={loading || generation?.reviewStatus === 'ACCEPTED' || Boolean(listing) || !selectionConfirmed}><Icon name="sparkles" size={17} />{loading ? '处理中' : generationRunning ? '继续查询生成状态' : generation?.content ? '重新生成文案与 SEO' : '生成文案与 SEO'}</button>
               </div>
               <p className="action-feedback" role="status" aria-live="polite" aria-busy={loading}>{message}</p>
               <label className="switch-card"><span><strong>自动接受通过校验的文案</strong><small>只接受内容，不创建或发布商品；默认由商家人工审核。</small></span><input type="checkbox" aria-label="自动接受文案" checked={reviewMode === 'AUTO'} disabled={loading || Boolean(generation)} onChange={(event) => setReviewMode(event.target.checked ? 'AUTO' : 'MANUAL')} /></label>
@@ -699,6 +723,14 @@ function CopyEditor({ content, disabled, onChange }: {
 
 function lines(value: string) {
   return value.split('\n').map((line) => line.trim()).filter(Boolean)
+}
+
+function agentRunPending(status: CopySeoGeneration['status']) {
+  return status === 'SUBMITTED' || status === 'RUNNING'
+}
+
+function delay(milliseconds: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 }
 
 function formatMoney(money: Money) {

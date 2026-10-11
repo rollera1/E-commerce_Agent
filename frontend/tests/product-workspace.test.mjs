@@ -161,6 +161,43 @@ test('成功文案等待人工审核，接受内容不会创建或发布商品',
   assert.ok(ui.calls.every((call) => !call.url.includes('shopify-listing')))
 })
 
+test('异步文案任务轮询完成后进入人工审核', async (t) => {
+  const ui = await confirmedWorkspace(t)
+  const submitted = { generationId: 'g-async', language: 'en', status: 'SUBMITTED', reviewStatus: 'NOT_APPLICABLE',
+    content: null, execution: { agent: 'COPY_SEO', model: 'pending', promptVersion: 'pending' } }
+  const completed = { ...submitted, status: 'SUCCEEDED', reviewStatus: 'PENDING_REVIEW',
+    content: { title: 'Lamp', bulletPoints: ['Light'], description: 'Desk lamp', seoTitle: 'Lamp', metaDescription: 'Desk lamp', tags: ['lamp'] },
+    execution: { agent: 'COPY_SEO', model: 'fake', promptVersion: 'v1' } }
+  ui.respond((url) => url.includes('/api/copy-seo-generations/g-async') ? completed : submitted)
+
+  await ui.click('生成文案与 SEO')
+
+  assert.equal(ui.calls[3].url, '/api/product-selections/task-1/copy-seo-generations')
+  assert.equal(ui.calls[4].url, '/api/copy-seo-generations/g-async')
+  assert.match(ui.message(), /请审核内容/)
+  assert.equal(ui.busy(), false)
+})
+
+test('异步查询中断后继续查询，不重复创建任务', async (t) => {
+  const ui = await confirmedWorkspace(t)
+  const submitted = { generationId: 'g-async', language: 'en', status: 'SUBMITTED', reviewStatus: 'NOT_APPLICABLE',
+    content: null, execution: { agent: 'COPY_SEO', model: 'pending', promptVersion: 'pending' } }
+  let queryFails = true
+  ui.respond((url) => {
+    if (!url.includes('/api/copy-seo-generations/g-async')) return submitted
+    if (queryFails) throw new Error('查询暂时中断')
+    return { ...submitted, status: 'FAILED', failure: { errorType: 'TIMEOUT', retryable: false } }
+  })
+
+  await ui.click('生成文案与 SEO')
+  assert.match(ui.message(), /查询暂时中断/)
+  queryFails = false
+  await ui.click('继续查询生成状态')
+
+  assert.equal(ui.calls.filter((call) => call.url.includes('/product-selections/task-1/copy-seo-generations')).length, 1)
+  assert.match(ui.message(), /TIMEOUT/)
+})
+
 
 async function acceptedWorkspace(t) {
   const ui = await confirmedWorkspace(t)

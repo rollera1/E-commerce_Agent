@@ -2,9 +2,16 @@ package com.ecommerce.agent.copyseo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -21,6 +28,9 @@ class CopySeoGenerationServiceTest {
 
     @Mock
     private CopySeoGenerationRepository repository;
+
+    @Mock
+    private CopySeoAgentRunGateway agentRunGateway;
 
     @Test
     void persistsSuccessfulAgentOutputAsPendingMerchantReview() {
@@ -69,6 +79,123 @@ class CopySeoGenerationServiceTest {
         assertThat(result.failure().retryable()).isFalse();
         assertThat(result.trace()).isEqualTo(failureTrace);
         verify(repository).save(any(CopySeoGeneration.class));
+    }
+
+    @Test
+    void asyncModePersistsJavaTaskAndSubmitsOnePythonRun() {
+        when(repository.save(any(CopySeoGeneration.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(agentRunGateway.submit(anyString(), eq(1), eq("fake-desk-lamp-001"), eq("US"), eq("en")))
+                .thenReturn(new AgentRunResult("run-1", AgentRunStatus.SUBMITTED, null, null));
+        var service = asyncService();
+
+        var result = service.generate(new CopySeoGenerationRequest(
+                "fake-desk-lamp-001", "US", "en"));
+
+        assertThat(result.status()).isEqualTo(GenerationStatus.SUBMITTED);
+        assertThat(result.reviewStatus()).isEqualTo(ReviewStatus.NOT_APPLICABLE);
+        assertThat(result.content()).isNull();
+        verify(agentRunGateway).submit(
+                eq(result.generationId()), eq(1), eq("fake-desk-lamp-001"), eq("US"), eq("en"));
+    }
+
+    @Test
+    void asyncModeKeepsMysqlTaskWhenInitialSubmissionIsUnavailable() {
+        when(repository.save(any(CopySeoGeneration.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(agentRunGateway.submit(anyString(), eq(1), eq("fake-desk-lamp-001"), eq("US"), eq("en")))
+                .thenThrow(new IllegalStateException("upstream response must not be persisted"));
+
+        var result = asyncService().generate(new CopySeoGenerationRequest(
+                "fake-desk-lamp-001", "US", "en"));
+
+        assertThat(result.status()).isEqualTo(GenerationStatus.SUBMITTED);
+        assertThat(result.failure()).isNull();
+    }
+
+    @Test
+    void asyncPollPersistsSuccessfulStructuredOutput() {
+        CopySeoGeneration pending = submittedWithRun("run-1", 1);
+        when(repository.findById(pending.generationId())).thenReturn(Optional.of(pending));
+        when(repository.save(any(CopySeoGeneration.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(agentRunGateway.get("run-1"))
+                .thenReturn(new AgentRunResult("run-1", AgentRunStatus.SUCCEEDED, generation(), null));
+
+        var result = asyncService().poll(pending.generationId());
+
+        assertThat(result.status()).isEqualTo(GenerationStatus.SUCCEEDED);
+        assertThat(result.reviewStatus()).isEqualTo(ReviewStatus.PENDING_REVIEW);
+        assertThat(result.content().title()).contains("Desk Lamp");
+    }
+
+    @Test
+    void asyncPollRejectsOutputForAnotherSourceProduct() {
+        CopySeoGeneration pending = submittedWithRun("run-1", 1);
+        AgentGeneration mismatched = new AgentGeneration(
+                "python-generation",
+                "another-source",
+                GenerationStatus.SUCCEEDED,
+                ReviewStatus.PENDING_REVIEW,
+                generation().content(),
+                generation().execution(),
+                generation().trace());
+        when(repository.findById(pending.generationId())).thenReturn(Optional.of(pending));
+        when(repository.save(any(CopySeoGeneration.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(agentRunGateway.get("run-1"))
+                .thenReturn(new AgentRunResult("run-1", AgentRunStatus.SUCCEEDED, mismatched, null));
+
+        var result = asyncService().poll(pending.generationId());
+
+        assertThat(result.status()).isEqualTo(GenerationStatus.FAILED);
+        assertThat(result.failure().errorType()).isEqualTo("INVALID_AGENT_RUN_OUTPUT");
+    }
+
+    @Test
+    void asyncPollRetriesOneWholeRunAndThenStops() {
+        CopySeoGeneration pending = submittedWithRun("run-1", 1);
+        when(repository.findById(pending.generationId())).thenReturn(Optional.of(pending));
+        when(repository.save(any(CopySeoGeneration.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(agentRunGateway.get("run-1"))
+                .thenReturn(new AgentRunResult(
+                        "run-1", AgentRunStatus.FAILED, null,
+                        new AgentRunFailure("TIMEOUT", true)));
+        when(agentRunGateway.submit(
+                pending.generationId(), 2, "fake-desk-lamp-001", "US", "en"))
+                .thenReturn(new AgentRunResult("run-2", AgentRunStatus.SUBMITTED, null, null));
+        when(agentRunGateway.get("run-2"))
+                .thenReturn(new AgentRunResult(
+                        "run-2", AgentRunStatus.FAILED, null,
+                        new AgentRunFailure("TIMEOUT", true)));
+        var service = asyncService();
+
+        var retried = service.poll(pending.generationId());
+        var failed = service.poll(pending.generationId());
+
+        assertThat(retried.status()).isEqualTo(GenerationStatus.SUBMITTED);
+        assertThat(failed.status()).isEqualTo(GenerationStatus.FAILED);
+        assertThat(failed.failure().errorType()).isEqualTo("TIMEOUT");
+        verify(agentRunGateway).submit(
+                pending.generationId(), 2, "fake-desk-lamp-001", "US", "en");
+        verify(agentRunGateway, never()).submit(
+                pending.generationId(), 3, "fake-desk-lamp-001", "US", "en");
+    }
+
+    @Test
+    void cancelPropagatesToPythonAndTerminatesJavaTask() {
+        CopySeoGeneration pending = submittedWithRun("run-1", 1);
+        when(repository.findById(pending.generationId())).thenReturn(Optional.of(pending));
+        when(repository.save(any(CopySeoGeneration.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(agentRunGateway.cancel("run-1"))
+                .thenReturn(new AgentRunResult("run-1", AgentRunStatus.RUNNING, null, null));
+
+        var result = asyncService().cancel(pending.generationId());
+
+        assertThat(result.status()).isEqualTo(GenerationStatus.CANCELLED);
+        verify(agentRunGateway).cancel("run-1");
     }
 
     @Test
@@ -180,5 +307,27 @@ class CopySeoGenerationServiceTest {
                         0,
                         List.of(),
                         "MERCHANT_REVIEW"));
+    }
+
+    private CopySeoGenerationService asyncService() {
+        return new CopySeoGenerationService(
+                agentGateway,
+                agentRunGateway,
+                repository,
+                Clock.fixed(Instant.parse("2026-10-11T10:00:00Z"), ZoneOffset.UTC),
+                true,
+                Duration.ofSeconds(2));
+    }
+
+    private CopySeoGeneration submittedWithRun(String runId, int attempt) {
+        Instant now = Instant.parse("2026-10-11T10:00:00Z");
+        CopySeoGeneration generation = CopySeoGeneration.submitted(
+                new CopySeoGenerationRequest("fake-desk-lamp-001", "US", "en"), now);
+        generation.bindRun(
+                new AgentRunResult(runId, AgentRunStatus.SUBMITTED, null, null),
+                attempt,
+                now,
+                now);
+        return generation;
     }
 }

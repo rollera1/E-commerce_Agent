@@ -19,6 +19,10 @@ external-services:
   python:
     base-url: ${PYTHON_SERVICE_URL:http://localhost:8005}
 
+agent:
+  execution-mode: ${AGENT_EXECUTION_MODE:sync}
+  poll-delay-ms: ${AGENT_POLL_DELAY_MS:2000}
+
 shopify:
   enabled: ${SHOPIFY_ENABLED:false}
   shop-domain: ${SHOPIFY_SHOP_DOMAIN:}
